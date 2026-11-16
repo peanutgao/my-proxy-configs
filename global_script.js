@@ -2340,6 +2340,18 @@ function main(config) {
     udp: false,
   })
 
+  // fork: 供「自动选择」与「默认节点」使用的可用节点名列表。
+  // 与地区归类采用同一套过滤（跳过倍率超限的节点），保证两边一致。
+  const proxyNames = proxies
+    .map((p) => (p && typeof p.name === 'string' ? p.name : ''))
+    .filter(Boolean)
+    .filter((name) => {
+      if (!excludeHighPercentage) return true
+      const match = multiplierRegex.exec(name)
+      return !(match && parseFloat(match[1]) > globalRatioLimit)
+    })
+    .filter((name) => name !== '直连' && name !== '拒绝')
+
   // 3.2 高效代理分类 (单次遍历)
   const regionGroups = {}
   regionDefinitions.forEach(
@@ -2395,6 +2407,23 @@ function main(config) {
 
   const regionGroupNames = generatedRegionGroups.map((g) => g.name).sort()
 
+  // fork: 顶层「自动选择」= 全部节点的 url-test，对应原订阅的「自动选择」组。
+  // 地区组本身也是 url-test，所以「选国家」依旧是自动测速；
+  // 而「默认节点」里同时列出具体节点，保留手动指定单个节点的能力。
+  const autoSelectGroup =
+    proxyNames.length > 0
+      ? [
+          {
+            ...groupBaseOption,
+            name: '自动选择',
+            type: 'url-test',
+            tolerance: 50,
+            proxies: [...proxyNames],
+            icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png',
+          },
+        ]
+      : []
+
   if (otherProxies.length > 0) {
     generatedRegionGroups.push({
       ...groupBaseOption,
@@ -2412,7 +2441,15 @@ function main(config) {
     ...groupBaseOption,
     name: '默认节点',
     type: 'select',
-    proxies: [...regionGroupNames, '其他节点', '直连'].filter((n) => n !== '其他节点' || otherProxies.length > 0),
+    // 顺序：自动选择 → 地区组（自动测速）→ 其他节点 → 各个具体节点 → 直连。
+    // 具体节点放在地区组之后，既保留「先按国家自动选」，也能像原订阅那样手动钉死单个节点。
+    proxies: [
+      ...autoSelectGroup.map((g) => g.name),
+      ...regionGroupNames,
+      ...(otherProxies.length > 0 ? ['其他节点'] : []),
+      ...proxyNames,
+      '直连',
+    ],
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png',
   })
 
@@ -2551,6 +2588,7 @@ function main(config) {
 
   // 3.6 组装最终结果
   config['proxy-groups'] = [
+    ...autoSelectGroup,
     ...functionalGroups,
     ...generatedRegionGroups.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })),
     ...preservedGroups,
