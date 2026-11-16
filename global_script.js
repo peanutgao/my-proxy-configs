@@ -2477,7 +2477,12 @@ function main(config) {
   })()
 
   if (appStoreNodes.length > 0) {
-    rules.unshift(
+    // 插在 OrbStack 直连之后、其余规则之前：进程级直连优先级始终最高。
+    const orbStackIndex = rules.findIndex((r) => r.includes('OrbStack Helper'))
+    const at = orbStackIndex >= 0 ? orbStackIndex + 1 : 0
+    rules.splice(
+      at,
+      0,
       'DOMAIN-SUFFIX,itunes.apple.com,App Store',
       'DOMAIN-SUFFIX,appldnld.apple.com,App Store',
       'DOMAIN,xp.apple.com,App Store',
