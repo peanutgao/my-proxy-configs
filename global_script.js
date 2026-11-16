@@ -1853,11 +1853,13 @@ const allRegionDefinitions = [
   },
   {
     name: 'CN中国大陆',
-    regex: /中国|🇨🇳|cn|china/i,
+    // fork: 原 /中国|🇨🇳|cn|china/ 会让「🇨🇳 台湾 03」这类旗标节点被误判进大陆组。
+    // 要求 cn 为独立词，并排除含台/港/澳的节点名（它们有各自的分组）。
+    regex: /^(?=.*(?:中国|🇨🇳|\bcn\b|china))(?!.*(?:台|台|港|澳|taiwan|hong ?kong|macau)).*/i,
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/China_Map.png',
   },
   {
-    name: 'TW台湾省',
+    name: 'TW台湾',
     regex: /台湾|台灣|🇹🇼|tw|taiwan|tai wan/i,
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/China.png',
   },
