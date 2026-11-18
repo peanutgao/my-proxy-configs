@@ -1816,8 +1816,8 @@ const _initialRules = [
   'DST-PORT,5353,直连', // 向日葵内网穿透
   'DST-PORT,9118,直连', // 节点小宝
   'GEOSITE,category-collaborate-cn,直连',
-  'GEOSITE,category-container,默认节点',
-  // 'GEOSITE,category-netdisk-!cn,默认节点',
+  'GEOSITE,category-container,手动选择',
+  // 'GEOSITE,category-netdisk-!cn,手动选择',
   'RULE-SET,applications,下载软件',
 ]
 
@@ -2350,7 +2350,7 @@ function main(config) {
     udp: false,
   })
 
-  // fork: 供「自动选择」与「默认节点」使用的可用节点名列表。
+  // fork: 供「自动选择」与「手动选择」使用的可用节点名列表。
   // 与地区归类采用同一套过滤（跳过倍率超限的节点），保证两边一致。
   const proxyNames = proxies
     .map((p) => (p && typeof p.name === 'string' ? p.name : ''))
@@ -2419,7 +2419,7 @@ function main(config) {
 
   // fork: 顶层「自动选择」= 全部节点的 url-test，对应原订阅的「自动选择」组。
   // 地区组本身也是 url-test，所以「选国家」依旧是自动测速；
-  // 而「默认节点」里同时列出具体节点，保留手动指定单个节点的能力。
+  // 而「手动选择」里同时列出具体节点，保留手动指定单个节点的能力。
   const autoSelectGroup =
     proxyNames.length > 0
       ? [
@@ -2434,22 +2434,26 @@ function main(config) {
         ]
       : []
 
-  if (otherProxies.length > 0) {
-    generatedRegionGroups.push({
-      ...groupBaseOption,
-      name: '其他节点',
-      type: 'select',
-      proxies: otherProxies,
-      icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png',
-    })
-  }
+  // fork:「其他节点」不再混进地区组列表，单独存放——顶层组顺序里排在功能组之后。
+  const otherNodeGroup =
+    otherProxies.length > 0
+      ? [
+          {
+            ...groupBaseOption,
+            name: '其他节点',
+            type: 'select',
+            proxies: otherProxies,
+            icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/World_Map.png',
+          },
+        ]
+      : []
 
   // 3.3 构建功能策略组
   const functionalGroups = []
 
   functionalGroups.push({
     ...groupBaseOption,
-    name: '默认节点',
+    name: '手动选择',
     type: 'select',
     // 顺序：自动选择 → 地区组（自动测速）→ 其他节点 → 各个具体节点 → 直连。
     // 具体节点放在地区组之后，既保留「先按国家自动选」，也能像原订阅那样手动钉死单个节点。
@@ -2481,14 +2485,14 @@ function main(config) {
 
       let groupProxies
       if (svc.reject) {
-        groupProxies = ['拒绝', '直连', '默认节点']
+        groupProxies = ['拒绝', '直连', '手动选择']
       } else if (svc.key === 'apple') {
         // 2026-11-18：Apple 服务一律直连，避免代理出口打断下载会话与商店接口。
         groupProxies = ['直连']
       } else if (svc.key === 'biliintl' || svc.key === 'bahamut') {
-        groupProxies = ['默认节点', '直连', ...regionGroupNames]
+        groupProxies = ['手动选择', '直连', ...regionGroupNames]
       } else {
-        groupProxies = ['默认节点', ...regionGroupNames, '直连']
+        groupProxies = ['手动选择', ...regionGroupNames, '直连']
       }
 
       functionalGroups.push({
@@ -2591,14 +2595,14 @@ function main(config) {
       ...groupBaseOption,
       name: '下载软件',
       type: 'select',
-      proxies: ['直连', '拒绝', '默认节点', '国内网站', ...regionGroupNames],
+      proxies: ['直连', '拒绝', '手动选择', '国内网站', ...regionGroupNames],
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Download.png',
     },
     {
       ...groupBaseOption,
       name: '其他外网',
       type: 'select',
-      proxies: ['默认节点', '国内网站', ...regionGroupNames],
+      proxies: ['手动选择', '国内网站', ...regionGroupNames],
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Streaming!CN.png',
       rules: ['GEOSITE,geolocation-!cn,其他外网'],
     },
@@ -2606,7 +2610,7 @@ function main(config) {
       ...groupBaseOption,
       name: '国内网站',
       type: 'select',
-      proxies: ['直连', '默认节点', ...regionGroupNames],
+      proxies: ['直连', '手动选择', ...regionGroupNames],
       url: 'https://wifi.vivo.com.cn/generate_204',
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/StreamingCN.png',
     }
@@ -2624,10 +2628,13 @@ function main(config) {
   const preservedGroups = originalGroups.filter((g) => g && dialerTargets.has(g.name))
 
   // 3.6 组装最终结果
+  // 2026-11-18：顺序调整为 自动选择 → 手动选择 → 地区组（国家）→ 功能组（国外AI/YouTube 等）
+  // → 其他节点 → dialer 保留组。手动选择组成员不变（自动选择→地区组→其他节点→具体节点→直连）。
   config['proxy-groups'] = [
     ...autoSelectGroup,
-    ...functionalGroups,
     ...generatedRegionGroups.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })),
+    ...functionalGroups,
+    ...otherNodeGroup,
     ...preservedGroups,
   ]
 
