@@ -2451,21 +2451,24 @@ function main(config) {
   // 3.3 构建功能策略组
   const functionalGroups = []
 
-  functionalGroups.push({
-    ...groupBaseOption,
-    name: '手动选择',
-    type: 'select',
-    // 顺序：自动选择 → 地区组（自动测速）→ 其他节点 → 各个具体节点 → 直连。
-    // 具体节点放在地区组之后，既保留「先按国家自动选」，也能像原订阅那样手动钉死单个节点。
-    proxies: [
-      ...autoSelectGroup.map((g) => g.name),
-      ...regionGroupNames,
-      ...(otherProxies.length > 0 ? ['其他节点'] : []),
-      ...proxyNames,
-      '直连',
-    ],
-    icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png',
-  })
+  // fork:「手动选择」独立于功能组——顶层顺序里紧跟「自动选择」（2026-11-18）。
+  const manualSelectGroup = [
+    {
+      ...groupBaseOption,
+      name: '手动选择',
+      type: 'select',
+      // 成员顺序：自动选择 → 地区组（自动测速）→ 其他节点 → 各个具体节点 → 直连。
+      // 具体节点放在地区组之后，既保留「先按国家自动选」，也能像原订阅那样手动钉死单个节点。
+      proxies: [
+        ...autoSelectGroup.map((g) => g.name),
+        ...regionGroupNames,
+        ...(otherProxies.length > 0 ? ['其他节点'] : []),
+        ...proxyNames,
+        '直连',
+      ],
+      icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png',
+    },
+  ]
 
   serviceConfigs.forEach((svc) => {
     if (ruleOptions[svc.key]) {
@@ -2628,10 +2631,11 @@ function main(config) {
   const preservedGroups = originalGroups.filter((g) => g && dialerTargets.has(g.name))
 
   // 3.6 组装最终结果
-  // 2026-11-18：顺序调整为 自动选择 → 手动选择 → 地区组（国家）→ 功能组（国外AI/YouTube 等）
-  // → 其他节点 → dialer 保留组。手动选择组成员不变（自动选择→地区组→其他节点→具体节点→直连）。
+  // 2026-11-18：顺序为 自动选择 → 手动选择 → 地区组（国家）→ 功能组（国外AI/YouTube 等）
+  // → 其他节点 → dialer 保留组。
   config['proxy-groups'] = [
     ...autoSelectGroup,
+    ...manualSelectGroup,
     ...generatedRegionGroups.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })),
     ...functionalGroups,
     ...otherNodeGroup,
