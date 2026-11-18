@@ -1944,7 +1944,16 @@ const dnsConfig = {
   'proxy-server-nameserver': chinaDNS,
   'nameserver-policy': {
     'geosite:private': 'system',
-    'geosite:tld-cn,cn,steam@cn,category-games@cn,microsoft@cn,apple@cn,category-game-platforms-download@cn,category-public-tracker':
+    // 2026-11-18：Apple 域名一律用境外 DNS 解析。国内 DNS 会把商店域名解析到中国 CDN
+    // 边缘，该边缘对 storefront / 下载接口固定 404，与下载会话出口也不一致。
+    // geosite 分类并不覆盖所有商店子域，这里按域名补齐，避免回落到国内 DNS。
+    'geosite:apple,apple@cn,apple-cn': foreignDNS,
+    '+.itunes.apple.com': foreignDNS,
+    '+.itunes.com': foreignDNS,
+    '+.mzstatic.com': foreignDNS,
+    '+.aaplimg.com': foreignDNS,
+    '+.appldnld.apple.com': foreignDNS,
+    'geosite:tld-cn,cn,steam@cn,category-games@cn,microsoft@cn,category-game-platforms-download@cn,category-public-tracker':
       chinaDNS,
     'geosite:gfw,jetbrains-ai,category-ai-!cn,category-ai-chat-!cn': foreignDNS,
     // 'geosite:telegram': foreignDNS,
@@ -1959,7 +1968,8 @@ const ruleProviderCommon = {
 }
 const groupBaseOption = {
   interval: 300,
-  timeout: 3000,
+  // 2026-11-18：3000ms 贴着节点劣化的真实延迟，会被误判成失败；放宽到 5000ms。
+  timeout: 5000,
   url: 'https://www.gstatic.com/generate_204',
   lazy: true,
   'max-failed-times': 3,
@@ -2472,6 +2482,9 @@ function main(config) {
       let groupProxies
       if (svc.reject) {
         groupProxies = ['拒绝', '直连', '默认节点']
+      } else if (svc.key === 'apple') {
+        // 2026-11-18：Apple 服务一律直连，避免代理出口打断下载会话与商店接口。
+        groupProxies = ['直连']
       } else if (svc.key === 'biliintl' || svc.key === 'bahamut') {
         groupProxies = ['默认节点', '直连', ...regionGroupNames]
       } else {
@@ -2512,26 +2525,50 @@ function main(config) {
   const appStoreNodes = (() => {
     const names = proxies.map((p) => (p && typeof p.name === 'string' ? p.name : '')).filter(Boolean)
     const jp = names.filter((n) => /日本|japan|🇯🇵/i.test(n))
-    return jp.length > 0 ? jp : names.filter((n) => /美国|united ?states|🇺🇸/i.test(n))
+    const us = names.filter((n) => /美国|united ?states|🇺🇸/i.test(n))
+    const base = jp.length > 0 ? jp : us
+    // 稳定节点排首位：组选择在 Verge 重新合成时可能被重置，此时默认落列表第一项。
+    // storefront 5/5 稳定的 IEPL/专线节点优先（2026-11-17 实测），普通节点殿后。
+    const rank = (n) => (/IEPL|专线|iepl/i.test(n) ? 0 : 1)
+    return [...base].sort((a, b) => rank(a) - rank(b))
   })()
 
   if (appStoreNodes.length > 0) {
     // 插在 OrbStack 直连之后、其余规则之前：进程级直连优先级始终最高。
     const orbStackIndex = rules.findIndex((r) => r.includes('OrbStack Helper'))
     const at = orbStackIndex >= 0 ? orbStackIndex + 1 : 0
+    // CDN 大文件域先于 API 域。2026-11-17 实测：直连 CDN 入口对真实文件请求
+    // （带签名 accessKey 的 GET）超时，只能走代理；大文件中途 EOF 是节点问题，
+    // 通过选稳定节点（IEPL）解决，而不是把 CDN 指向直连。
+    // 2026-11-18：Apple 官方域名一律直连，绝不进代理。
+    // 代理出口会改写下载会话绑定的出口 IP，出现 storefront 404 / redownload 403 / 中途 EOF。
     rules.splice(
       at,
       0,
-      'DOMAIN-SUFFIX,itunes.apple.com,App Store',
-      'DOMAIN-SUFFIX,appldnld.apple.com,App Store',
-      'DOMAIN,xp.apple.com,App Store',
-      'DOMAIN-SUFFIX,mzstatic.com,App Store'
+      'DOMAIN,adsdk.apple.com,拒绝',
+      'DOMAIN-SUFFIX,mzstatic.com,直连',
+      'DOMAIN,iosapps.itunes.apple.com,直连',
+      'DOMAIN-SUFFIX,itunes.apple.com,直连',
+      'DOMAIN-SUFFIX,itunes.com,直连',
+      'DOMAIN-SUFFIX,appldnld.apple.com,直连',
+      'DOMAIN,xp.apple.com,直连',
+      'DOMAIN-SUFFIX,aaplimg.com,直连',
+      'DOMAIN-SUFFIX,apple.com,直连'
     )
     functionalGroups.unshift({
       ...groupBaseOption,
       name: 'App Store',
+      // 必须是 select（单出口）而不是 fallback/url-test：Apple 下载会话 token 绑定出口 IP，
+      // 组内任何自动切换都会让同一会话跨出口 → AMS 301 / HTTP 403（2026-11-17 实测，
+      // fallback 120s 健康检查期间组内漂移导致组件报 redownload 403）。
+      // 健康检查仍探 storefront 端点（CN/HK 出口 404 判失败），只用于 Verge 面板显示，
+      // 不自动切换：节点坏了用户在面板手动换，换来的是会话全程出口稳定。
       type: 'select',
-      proxies: appStoreNodes,
+      url: 'https://itunes.apple.com/WebObjects/MZStore.woa/wa/availableStoreFronts',
+      interval: 300,
+      // IEPL 专线排最前：storefront 5/5 稳定（普通节点 2~3/5 间歇 EOF）。
+      // select 组默认取第一项，重启/重新合成后自动回到专线。
+      proxies: ['直连'],
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png',
     })
   }
