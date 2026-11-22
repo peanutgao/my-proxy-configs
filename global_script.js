@@ -1768,6 +1768,7 @@ let ruleOptions = {
   microsoft: false,
   github: false,
   google: false,
+  googleai: false,
   openai: false,
   spotify: false,
   youtube: false,
@@ -1944,15 +1945,6 @@ const dnsConfig = {
   'proxy-server-nameserver': chinaDNS,
   'nameserver-policy': {
     'geosite:private': 'system',
-    // 2026-11-18：Apple 域名一律用境外 DNS 解析。国内 DNS 会把商店域名解析到中国 CDN
-    // 边缘，该边缘对 storefront / 下载接口固定 404，与下载会话出口也不一致。
-    // geosite 分类并不覆盖所有商店子域，这里按域名补齐，避免回落到国内 DNS。
-    'geosite:apple,apple@cn,apple-cn': foreignDNS,
-    '+.itunes.apple.com': foreignDNS,
-    '+.itunes.com': foreignDNS,
-    '+.mzstatic.com': foreignDNS,
-    '+.aaplimg.com': foreignDNS,
-    '+.appldnld.apple.com': foreignDNS,
     'geosite:tld-cn,cn,steam@cn,category-games@cn,microsoft@cn,category-game-platforms-download@cn,category-public-tracker':
       chinaDNS,
     'geosite:gfw,jetbrains-ai,category-ai-!cn,category-ai-chat-!cn': foreignDNS,
@@ -1993,6 +1985,33 @@ const multiplierRegex = /(?<=[xX✕✖⨉倍率])([1-9]+(\.\d+)*|0{1}\.\d+)(?=[x
 // --- 2. 服务规则数据结构 ---
 // Icons 更新为 GitHub Raw
 const serviceConfigs = [
+  // 2026-11-22 fork: 谷歌AI独立分流。必须排在 openai（category-ai-!cn 会兜走
+  // gemini/antigravity）与 google（GEOSITE,google 会兜走 googleapis.com）之前，
+  // 否则规则首条命中、独立组永远不生效。antigravity 域名 geosite 里没有完整集合
+  // （antigravity.google / antigravity-unleash.goog / antigravity-pa.googleapis.com /
+  // cloudcode-pa.googleapis.com 等），用 DOMAIN 明确列出。
+  {
+    key: 'googleai',
+    name: '谷歌AI',
+    icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google.png',
+    url: 'https://gemini.google.com/',
+    rules: [
+      'DOMAIN-SUFFIX,antigravity.google,谷歌AI',
+      'DOMAIN-SUFFIX,antigravity-unleash.goog,谷歌AI',
+      'DOMAIN,antigravity-pa.googleapis.com,谷歌AI',
+      'DOMAIN,antigravity.googleapis.com,谷歌AI',
+      'DOMAIN,cloudcode-pa.googleapis.com,谷歌AI',
+      'DOMAIN,aiplatform.googleapis.com,谷歌AI',
+      'DOMAIN-SUFFIX,generativelanguage.googleapis.com,谷歌AI',
+      'DOMAIN-SUFFIX,aistudio.google.com,谷歌AI',
+      'DOMAIN-SUFFIX,gemini.google.com,谷歌AI',
+      'DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com,谷歌AI',
+      'DOMAIN-SUFFIX,ai.google.dev,谷歌AI',
+      'DOMAIN-SUFFIX,deepmind.google,谷歌AI',
+      'DOMAIN-SUFFIX,deepmind.com,谷歌AI',
+      'GEOSITE,google-gemini,谷歌AI',
+    ],
+  },
   {
     key: 'openai',
     name: '国外AI',
@@ -2494,6 +2513,14 @@ function main(config) {
         groupProxies = ['直连']
       } else if (svc.key === 'biliintl' || svc.key === 'bahamut') {
         groupProxies = ['手动选择', '直连', ...regionGroupNames]
+      } else if (svc.key === 'googleai') {
+        // fork: 谷歌AI对非美出口限制最多（Gemini/Antigravity 地区封锁清单以美国最全），
+        // 组成员美国排最前，select 组默认取第一项，重新合成后自动落美国节点。
+        const usFirst = [...regionGroupNames].sort((a, b) => {
+          const rank = (n) => (/US/i.test(n) ? 0 : 1)
+          return rank(a) - rank(b)
+        })
+        groupProxies = ['手动选择', ...usFirst, '直连']
       } else {
         groupProxies = ['手动选择', ...regionGroupNames, '直连']
       }
@@ -2549,6 +2576,8 @@ function main(config) {
     // 通过选稳定节点（IEPL）解决，而不是把 CDN 指向直连。
     // 2026-11-18：Apple 官方域名一律直连，绝不进代理。
     // 代理出口会改写下载会话绑定的出口 IP，出现 storefront 404 / redownload 403 / 中途 EOF。
+    // 只列商店与 CDN 真正用到的域名：apple.com 整域直连会连带影响 iCloud、
+    // 推送等需要代理的 Apple 服务，范围要收窄。
     rules.splice(
       at,
       0,
@@ -2559,8 +2588,7 @@ function main(config) {
       'DOMAIN-SUFFIX,itunes.com,直连',
       'DOMAIN-SUFFIX,appldnld.apple.com,直连',
       'DOMAIN,xp.apple.com,直连',
-      'DOMAIN-SUFFIX,aaplimg.com,直连',
-      'DOMAIN-SUFFIX,apple.com,直连'
+      'DOMAIN-SUFFIX,aaplimg.com,直连'
     )
     functionalGroups.unshift({
       ...groupBaseOption,
@@ -2579,6 +2607,28 @@ function main(config) {
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png',
     })
   }
+
+  // 3.5 fork: 微信/腾讯直连。微信客户端对海外 CDN（Tencent Cloud 国际段）走裸 IP
+  //     连接、无 SNI，域名规则接不住；这些 IP 在 mmdb 里判为 SG/HK/US，GEOIP,cn 不含，
+  //     于是命中兜底 MATCH → 其他外网 → 美国节点，表现为收发极慢、聊天图片加载失败。
+  //     2026-11-22 实测：43.130.30.185:8080（微信长连接）命中 MATCH → 美国 04。
+  //     IP-ASN,132203 = Tencent（ASN.mmdb 随包分发），no-resolve 防 DNS 泄漏；
+  //     域名规则覆盖有 SNI 的连接（图片 CDN mmbiz.qpic.cn 等）。排在 GEOIP,cn 之前，
+  //     与 dedione 拦截规则无冲突（那里只收广告域，微信域不在其中）。
+  rules.push(
+    'IP-ASN,132203,直连,no-resolve',
+    'DOMAIN-SUFFIX,qq.com,直连',
+    'DOMAIN-SUFFIX,qpic.cn,直连',
+    'DOMAIN-SUFFIX,qlogo.cn,直连',
+    'DOMAIN-SUFFIX,gtimg.cn,直连',
+    'DOMAIN-SUFFIX,gtimg.com,直连',
+    'DOMAIN-SUFFIX,wechat.com,直连',
+    'DOMAIN-SUFFIX,weixin.com,直连',
+    'DOMAIN-SUFFIX,weixinbridge.com,直连',
+    'DOMAIN-SUFFIX,servicewechat.com,直连',
+    'DOMAIN-SUFFIX,tenpay.com,直连',
+    'DOMAIN-SUFFIX,wechatpay.com,直连'
+  )
 
   // 3.5 添加通用兜底策略组
   rules.push(
