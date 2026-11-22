@@ -416,7 +416,9 @@ const _dedioneAds = [
   "DOMAIN-SUFFIX,xiaozhen.com",
   "DOMAIN-SUFFIX,xibao100.com",
   "DOMAIN-SUFFIX,xtgreat.com",
-  "DOMAIN-SUFFIX,xy.com",
+  // 2026-11-22 移除 xy.com：整域后缀过宽（会挡掉所有 *.xy.com），且与
+  // blackmatrix7 WeChat 集的 weixinsxy.com 有前缀混淆风险。来源名单无法确认
+  // 其广告语义，宁放行不误杀。
   "DOMAIN-SUFFIX,yandui.com",
   "DOMAIN-SUFFIX,yigao.com",
   "DOMAIN-SUFFIX,yijifen.com",
@@ -1815,7 +1817,6 @@ const _initialRules = [
   'DST-PORT,9118,直连', // 节点小宝端口
   'DST-PORT,50000-50100,直连', // AnyDesk/RustDesk备用中继端口（关键！）
   'DST-PORT,5353,直连', // 向日葵内网穿透
-  'DST-PORT,9118,直连', // 节点小宝
   'GEOSITE,category-collaborate-cn,直连',
   'GEOSITE,category-container,手动选择',
   // 'GEOSITE,category-netdisk-!cn,手动选择',
