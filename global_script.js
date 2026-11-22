@@ -1977,6 +1977,15 @@ const ruleProviders = {
     url: 'https://github.com/DustinWin/ruleset_geodata/raw/refs/heads/mihomo-ruleset/applications.list',
     path: './ruleset/DustinWin/applications.list',
   },
+  // 2026-11-22: blackmatrix7 WeChat 规则集（8 DOMAIN + 22 DOMAIN-SUFFIX + IP-ASN,132203）。
+  // 换成上游维护后微信域名与腾讯 ASN 段不再手工跟进；上游每日重建该 list。
+  wechat: {
+    ...ruleProviderCommon,
+    behavior: 'classical',
+    format: 'text',
+    url: 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/WeChat/WeChat.list',
+    path: './ruleset/blackmatrix7/WeChat.list',
+  },
 }
 
 // 倍率正则预编译
@@ -2608,27 +2617,14 @@ function main(config) {
     })
   }
 
-  // 3.5 fork: 微信/腾讯直连。微信客户端对海外 CDN（Tencent Cloud 国际段）走裸 IP
-  //     连接、无 SNI，域名规则接不住；这些 IP 在 mmdb 里判为 SG/HK/US，GEOIP,cn 不含，
-  //     于是命中兜底 MATCH → 其他外网 → 美国节点，表现为收发极慢、聊天图片加载失败。
-  //     2026-11-22 实测：43.130.30.185:8080（微信长连接）命中 MATCH → 美国 04。
-  //     IP-ASN,132203 = Tencent（ASN.mmdb 随包分发），no-resolve 防 DNS 泄漏；
-  //     域名规则覆盖有 SNI 的连接（图片 CDN mmbiz.qpic.cn 等）。排在 GEOIP,cn 之前，
-  //     与 dedione 拦截规则无冲突（那里只收广告域，微信域不在其中）。
-  rules.push(
-    'IP-ASN,132203,直连,no-resolve',
-    'DOMAIN-SUFFIX,qq.com,直连',
-    'DOMAIN-SUFFIX,qpic.cn,直连',
-    'DOMAIN-SUFFIX,qlogo.cn,直连',
-    'DOMAIN-SUFFIX,gtimg.cn,直连',
-    'DOMAIN-SUFFIX,gtimg.com,直连',
-    'DOMAIN-SUFFIX,wechat.com,直连',
-    'DOMAIN-SUFFIX,weixin.com,直连',
-    'DOMAIN-SUFFIX,weixinbridge.com,直连',
-    'DOMAIN-SUFFIX,servicewechat.com,直连',
-    'DOMAIN-SUFFIX,tenpay.com,直连',
-    'DOMAIN-SUFFIX,wechatpay.com,直连'
-  )
+  // 3.5 微信/腾讯直连：改用 blackmatrix7 WeChat 规则集（上游自动更新，免自维护）。
+  //     背景：微信客户端对海外 CDN（Tencent Cloud 国际段）走裸 IP、无 SNI，域名规则
+  //     接不住；这些 IP 在 mmdb 里判为 SG/HK/US，GEOIP,cn 不含，命中兜底 MATCH →
+  //     其他外网 → 美国节点（2026-11-22 实测 43.130.30.185:8080 → 美国 04）。
+  //     该规则集 = 8 DOMAIN + 22 DOMAIN-SUFFIX + IP-ASN,132203（社区标准做法，
+  //     与本 fork 此前手写的 IP-ASN,132203 一致）。classical text provider 直接吃
+  //     这种带类型前缀的 .list；RULE-SET 放 GEOIP,cn 之前。上游更新 interval 86400。
+  rules.push('RULE-SET,wechat,直连')
 
   // 3.5 添加通用兜底策略组
   rules.push(
