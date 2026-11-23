@@ -20,7 +20,7 @@
  */
 
 // 顺序很重要：必须让 DualSubs 最后执行，使其注入的字幕轨道成为最终响应、
-// 不被 Maasea 二次序列化破坏（实测：DualSubs 在后会被 Maasea 重新写回 protobuf
+// 不被 Maasea 二次序列化破坏（实测：DualSubs 在前会被 Maasea 重新写回 protobuf
 // 时弄坏字幕轨道，导致 App 不显示字幕；而单独用 DualSubs 正常）。
 // Maasea 先在原始响应上去广告/开后台，其改动位于 DualSubs schema 之外的字段，
 // 会被 DualSubs 的 protobuf-es unknown-field 机制原样保留。
@@ -73,6 +73,24 @@ function storeWrite(value, key) {
   return false;
 }
 
+/* ----------------------------- URL 解析辅助 ----------------------------- */
+
+function resolveLocation(baseUrl, loc) {
+  if (/^https?:\/\//i.test(loc)) return loc;
+  var m = baseUrl.match(/^(https?:\/\/[^\/]+)(\/.*)?$/i);
+  if (!m) return loc;
+  var origin = m[1];
+  if (loc.indexOf("//") === 0) {
+    return baseUrl.slice(0, baseUrl.indexOf(":") + 1) + loc;
+  }
+  if (loc.charAt(0) === "/") {
+    return origin + loc;
+  }
+  var basePath = m[2] || "/";
+  var dir = basePath.slice(0, basePath.lastIndexOf("/") + 1);
+  return origin + dir + loc;
+}
+
 /* ----------------------------- 下载（带缓存） ----------------------------- */
 
 // 网络下载。注意：Quantumult X 没有 $httpClient（那是 Surge/Loon 的 API），
@@ -82,23 +100,49 @@ function httpGet(url) {
   return new Promise(function (resolve, reject) {
     var hasTask = typeof $task !== "undefined" && $task && $task.fetch;
     var hasHttpClient = typeof $httpClient !== "undefined" && $httpClient && $httpClient.get;
+    var settled = false;
+    var timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      reject(new Error("fetch timeout (" + FETCH_TIMEOUT_MS + "ms): " + url));
+    }, FETCH_TIMEOUT_MS);
+
+    function finishResolve(data) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(data);
+    }
+
+    function finishReject(err) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    }
 
     if (hasTask) {
       var tries = 0;
       var go = function (u) {
+        if (settled) return;
         tries++;
-        if (tries > 6) return reject(new Error("too many redirects: " + url));
+        if (tries > 6) return finishReject(new Error("too many redirects: " + url));
         $task.fetch({ url: u, method: "GET" }).then(
           function (resp) {
-            var status = resp && (resp.statusCode != null ? resp.statusCode : resp.status);
+            var status = Number(resp && (resp.statusCode != null ? resp.statusCode : resp.status));
             var headers = (resp && resp.headers) || {};
             var loc = headers.Location || headers.location;
-            if (status >= 300 && status < 400 && loc) return go(loc);
-            if (resp && resp.body) return resolve(resp.body);
-            return reject(new Error("empty body (" + status + "): " + u));
+            if (status >= 300 && status < 400 && loc) {
+              return go(resolveLocation(u, loc));
+            }
+            if (!(status >= 200 && status < 300)) {
+              return finishReject(new Error("HTTP " + status + ": " + u));
+            }
+            if (resp && resp.body) return finishResolve(resp.body);
+            return finishReject(new Error("empty body (" + status + "): " + u));
           },
           function (err) {
-            reject(err);
+            finishReject(err);
           }
         );
       };
@@ -108,14 +152,17 @@ function httpGet(url) {
 
     if (hasHttpClient) {
       $httpClient.get({ url: url, timeout: FETCH_TIMEOUT_MS }, function (error, response, data) {
-        if (error) return reject(error);
-        if (!data || (response && response.status >= 400)) return reject(new Error("HTTP fail: " + url));
-        resolve(data);
+        if (error) return finishReject(error);
+        var status = Number(response && (response.status != null ? response.status : response.statusCode));
+        if (!data || !(status >= 200 && status < 300)) {
+          return finishReject(new Error("HTTP fail (" + status + "): " + url));
+        }
+        finishResolve(data);
       });
       return;
     }
 
-    reject(new Error("no network api ($task/$httpClient) available"));
+    finishReject(new Error("no network api ($task/$httpClient) available"));
   });
 }
 

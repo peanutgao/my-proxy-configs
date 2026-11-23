@@ -194,7 +194,6 @@
   "DOMAIN-SUFFIX,gepush.com",
   "DOMAIN-SUFFIX,getui.com",
   "DOMAIN-SUFFIX,glispa.com",
-  "DOMAIN-SUFFIX,go-mpulse",
   "DOMAIN-SUFFIX,go-mpulse.net",
   "DOMAIN-SUFFIX,godloveme.cn",
   "DOMAIN-SUFFIX,gridsum.com",
@@ -390,7 +389,6 @@
   "DOMAIN-SUFFIX,xiaozhen.com",
   "DOMAIN-SUFFIX,xibao100.com",
   "DOMAIN-SUFFIX,xtgreat.com",
-  "DOMAIN-SUFFIX,xy.com",
   "DOMAIN-SUFFIX,yandui.com",
   "DOMAIN-SUFFIX,yigao.com",
   "DOMAIN-SUFFIX,yijifen.com",
@@ -619,7 +617,6 @@
   "DOMAIN-SUFFIX,nc045x.corp.youdao.com",
   "DOMAIN-SUFFIX,nex.corp.163.com",
   "DOMAIN-SUFFIX,oimagea2.ydstatic.com",
-  "DOMAIN-SUFFIX,pagechoice.net",
   "DOMAIN-SUFFIX,prom.gome.com.cn",
   "DOMAIN-SUFFIX,qchannel0d.cn",
   "DOMAIN-SUFFIX,qt002x.corp.youdao.com",
@@ -1298,7 +1295,6 @@
   "DOMAIN-SUFFIX,clicks.beap.bc.yahoo.com",
   "DOMAIN-SUFFIX,comet.yahoo.com",
   "DOMAIN-SUFFIX,doubleplay-conf-yql.media.yahoo.com",
-  "DOMAIN-SUFFIX,flurry.com",
   "DOMAIN-SUFFIX,gemini.yahoo.com",
   "DOMAIN-SUFFIX,geo.yahoo.com",
   "DOMAIN-SUFFIX,js-apac-ss.ysm.yahoo.com",
@@ -1617,7 +1613,5 @@
   "DOMAIN-SUFFIX,tralog.ganji.com",
   "DOMAIN-SUFFIX,up.qingdaonews.com",
   "DOMAIN-SUFFIX,vaserviece.10jqka.com.cn"
- ],
- "source": "dedione R8mjUGiWGl50.yaml",
- "exported": "2026-11-16"
+ ]
 }

@@ -22,8 +22,8 @@ $response.bodyBytes 读二进制、通过 Content-Type 头判断格式。旧版�
 
 【上传/更新步骤】
 1. 把这两个文件覆盖到 GitHub：
-   quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
-   quantumult/youtube_qx_merge/merge.youtube.response.js
+   rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
+   rewrite/quantumult/youtube_qx_merge/merge.youtube.response.js
 
 2. 覆盖后打开 raw 地址检查，应显示多行文本（不是 Total lines: 1）：
    https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf

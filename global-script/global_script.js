@@ -220,7 +220,6 @@ const _dedioneAds = [
   "DOMAIN-SUFFIX,gepush.com",
   "DOMAIN-SUFFIX,getui.com",
   "DOMAIN-SUFFIX,glispa.com",
-  "DOMAIN-SUFFIX,go-mpulse",
   "DOMAIN-SUFFIX,go-mpulse.net",
   "DOMAIN-SUFFIX,godloveme.cn",
   "DOMAIN-SUFFIX,gridsum.com",
@@ -648,7 +647,6 @@ const _dedionePurify = [
   "DOMAIN-SUFFIX,nc045x.corp.youdao.com",
   "DOMAIN-SUFFIX,nex.corp.163.com",
   "DOMAIN-SUFFIX,oimagea2.ydstatic.com",
-  "DOMAIN-SUFFIX,pagechoice.net",
   "DOMAIN-SUFFIX,prom.gome.com.cn",
   "DOMAIN-SUFFIX,qchannel0d.cn",
   "DOMAIN-SUFFIX,qt002x.corp.youdao.com",
@@ -1327,7 +1325,6 @@ const _dedionePurify = [
   "DOMAIN-SUFFIX,clicks.beap.bc.yahoo.com",
   "DOMAIN-SUFFIX,comet.yahoo.com",
   "DOMAIN-SUFFIX,doubleplay-conf-yql.media.yahoo.com",
-  "DOMAIN-SUFFIX,flurry.com",
   "DOMAIN-SUFFIX,gemini.yahoo.com",
   "DOMAIN-SUFFIX,geo.yahoo.com",
   "DOMAIN-SUFFIX,js-apac-ss.ysm.yahoo.com",
@@ -1856,8 +1853,8 @@ const allRegionDefinitions = [
   {
     name: 'CN中国大陆',
     // fork: 原 /中国|🇨🇳|cn|china/ 会让「🇨🇳 台湾 03」这类旗标节点被误判进大陆组。
-    // 要求 cn 为独立词，并排除含台/港/澳的节点名（它们有各自的分组）。
-    regex: /^(?=.*(?:中国|🇨🇳|\bcn\b|china))(?!.*(?:台|台|港|澳|taiwan|hong ?kong|macau)).*/i,
+    // 要求 cn 为独立词，并排除含台/臺/港/澳的节点名（它们有各自的分组）。
+    regex: /^(?=.*(?:中国|🇨🇳|\bcn\b|china))(?!.*(?:台|臺|港|澳|taiwan|hong ?kong|macau)).*/i,
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/China_Map.png',
   },
   {
@@ -2106,7 +2103,7 @@ const serviceConfigs = [
     key: 'pixiv',
     name: 'Pixiv',
     icon: 'https://play-lh.googleusercontent.com/8pFuLOHF62ADcN0ISUAyEueA5G8IF49mX_6Az6pQNtokNVHxIVbS1L2NM62H-k02rLM=w240-h480-rw',
-    url: 'http://spclient.wg.spotify.com/signup/public/v1/account',
+    url: 'https://www.pixiv.net/favicon.ico',
     rules: ['GEOSITE,pixiv,Pixiv'],
   },
   {
@@ -2226,13 +2223,17 @@ function main(config) {
 
   rules.length = 0
   rules.push(..._initialRules)
+  const localRuleProviders = { ...ruleProviders }
 
-  const proxies = config?.proxies || []
-  const proxyCount = proxies.length
+  if (!Array.isArray(config.proxies)) {
+    config.proxies = []
+  }
   const proxyProviderCount =
-    typeof config?.['proxy-providers'] === 'object' ? Object.keys(config['proxy-providers']).length : 0
+    typeof config?.['proxy-providers'] === 'object' && config['proxy-providers'] !== null
+      ? Object.keys(config['proxy-providers']).length
+      : 0
 
-  if (proxyCount === 0 && proxyProviderCount === 0) {
+  if (config.proxies.length === 0 && proxyProviderCount === 0) {
     throw new Error('配置文件中未找到任何代理')
   }
 
@@ -2286,80 +2287,62 @@ function main(config) {
       config['interface-name'] = interfaceName
     }
 
-    if (INFRASTRUCTURE_TAKEOVER) {
     config['sniffer'] = {
-        enable: sniffer,
-        'force-dns-mapping': true,
-        'parse-pure-ip': true,
-        'override-destination': true,
-        sniff: {
-          TLS: {
-            ports: [443, 8443],
-          },
-          HTTP: {
-            ports: [80, '8080-8880'],
-          },
-          QUIC: {
-            ports: [443, 8443],
-          },
+      enable: sniffer,
+      'force-dns-mapping': true,
+      'parse-pure-ip': true,
+      'override-destination': true,
+      sniff: {
+        TLS: {
+          ports: [443, 8443],
         },
-        'skip-src-address': skipIps.filter((ip) => ip !== '198.18.0.0/16'),
-        // 'skip-dst-address': skipIps,
-        // 'force-domain': [
-        //   '+.google.com',
-        //   '+.googleapis.com',
-        //   '+.googleusercontent.com',
-        //   '+.youtube.com',
-        //   '+.facebook.com',
-        //   '+.messenger.com',
-        //   '+.fbcdn.net',
-        //   'fbcdn-a.akamaihd.net',
-        // ],
-        'skip-domain': ['Mijia Cloud', '+.oray.com'],
-      }
-  }
+        HTTP: {
+          ports: [80, '8080-8880'],
+        },
+        QUIC: {
+          ports: [443, 8443],
+        },
+      },
+      'skip-src-address': skipIps.filter((ip) => ip !== '198.18.0.0/16'),
+      'skip-domain': ['Mijia Cloud', '+.oray.com'],
+    }
 
-    if (INFRASTRUCTURE_TAKEOVER) {
     config['ntp'] = {
-        enable: true,
-        'write-to-system': false,
-        server: 'cn.ntp.org.cn',
-      }
-  }
-    if (INFRASTRUCTURE_TAKEOVER) {
+      enable: true,
+      'write-to-system': false,
+      server: 'cn.ntp.org.cn',
+    }
+
     config['tun'] = {
-        enable: true,
-        stack: 'mixed',
-        device: 'utun1999',
-        'auto-route': true,
-        'auto-redirect': true,
-        'auto-detect-interface': true,
-        'strict-route': true,
-        mtu: 1500,
-        gso: true,
-        'gso-max-size': 65536,
-        'exclude-interface': ['NodeBabyLink'],
-        'route-exclude-address': skipIps.filter((ip) => ip !== '198.18.0.0/16'),
-        'dns-hijack': ['any:53', 'tcp://any:53'],
-      }
-  }
-    if (INFRASTRUCTURE_TAKEOVER) {
+      enable: true,
+      stack: 'mixed',
+      device: 'utun1999',
+      'auto-route': true,
+      'auto-redirect': true,
+      'auto-detect-interface': true,
+      'strict-route': true,
+      mtu: 1500,
+      gso: true,
+      'gso-max-size': 65536,
+      'exclude-interface': ['NodeBabyLink'],
+      'route-exclude-address': skipIps.filter((ip) => ip !== '198.18.0.0/16'),
+      'dns-hijack': ['any:53', 'tcp://any:53'],
+    }
+
     config['geox-url'] = {
-        geoip: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat`,
-        geosite: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat`,
-        mmdb: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb`,
-        asn: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb`,
-      }
+      geoip: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat`,
+      geosite: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat`,
+      mmdb: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb`,
+      asn: `${githubProxy}https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb`,
+    }
   }
 
-  }
-
-  // fork: 订阅自带节点里可能有同名「直连」（MyDedione 就有），直接 push 会撞名、
-  // 导致整份配置校验失败。先删同名项，再补本脚本需要的两个内置出口。
-  for (const reserved of ['直连', '拒绝']) {
-    const index = config.proxies.findIndex((p) => p && p.name === reserved)
-    if (index !== -1) config.proxies.splice(index, 1)
-  }
+  // fork: 订阅自带节点里可能有同名「直连」「拒绝」（MyDedione 就有），直接 push 会撞名、
+  // 导致整份配置校验失败；且若先记 proxyCount 再 splice/push，新 push 的「直连」会误入「其他节点」。
+  // 先剥离保留名、保存纯用户节点快照 userProxies，再补两个内置出口。
+  const reservedNames = new Set(['直连', '拒绝'])
+  config.proxies = config.proxies.filter((p) => p && !reservedNames.has(p.name))
+  const userProxies = [...config.proxies]
 
   config.proxies.push({
     name: '直连',
@@ -2376,7 +2359,7 @@ function main(config) {
 
   // fork: 供「自动选择」与「手动选择」使用的可用节点名列表。
   // 与地区归类采用同一套过滤（跳过倍率超限的节点），保证两边一致。
-  const proxyNames = proxies
+  const proxyNames = userProxies
     .map((p) => (p && typeof p.name === 'string' ? p.name : ''))
     .filter(Boolean)
     .filter((name) => {
@@ -2384,9 +2367,8 @@ function main(config) {
       const match = multiplierRegex.exec(name)
       return !(match && parseFloat(match[1]) > globalRatioLimit)
     })
-    .filter((name) => name !== '直连' && name !== '拒绝')
 
-  // 3.2 高效代理分类 (单次遍历)
+  // 3.2 高效代理分类 (单次遍历，仅遍历纯用户节点 userProxies)
   const regionGroups = {}
   regionDefinitions.forEach(
     (r) =>
@@ -2397,9 +2379,10 @@ function main(config) {
   )
   const otherProxies = []
 
-  for (let i = 0; i < proxyCount; i++) {
-    const proxy = proxies[i]
-    const name = proxy.name
+  for (let i = 0; i < userProxies.length; i++) {
+    const proxy = userProxies[i]
+    const name = proxy && typeof proxy.name === 'string' ? proxy.name : ''
+    if (!name) continue
     let matched = false
 
     // 检查倍率
@@ -2500,7 +2483,7 @@ function main(config) {
 
       if (Array.isArray(svc.providers)) {
         svc.providers.forEach((p) => {
-          ruleProviders[p.key] = {
+          localRuleProviders[p.key] = {
             ...ruleProviderCommon,
             behavior: p.behavior,
             format: p.format,
@@ -2525,7 +2508,7 @@ function main(config) {
           const rank = (n) => (/US/i.test(n) ? 0 : 1)
           return rank(a) - rank(b)
         })
-        groupProxies = ['手动选择', ...usFirst, '直连']
+        groupProxies = [...usFirst, '手动选择', '直连']
       } else {
         groupProxies = ['手动选择', ...regionGroupNames, '直连']
       }
@@ -2559,59 +2542,45 @@ function main(config) {
     })
   rules.push(..._withReject(_dedioneAds), ..._withReject(_dedionePurify))
 
-  // (c) App Store：availableStoreFronts 对 CN/HK 出口 404，只有日本/美国 200。
-  //     按节点名动态建组；无日本/美国节点时整体跳过，避免规则悬空导致配置报废。
+  // (c) App Store：2026-11-18 确认默认走直连以避免下载会话切出口导致 403/404/EOF；
+  //     同时保留 JP/US（IEPL 专线优先）作为 App Store select 组的手动备选节点。
+  //     无论订阅是否含日/美节点均无条件生效，避免规则失效或产生孤儿分组。
   const appStoreNodes = (() => {
-    const names = proxies.map((p) => (p && typeof p.name === 'string' ? p.name : '')).filter(Boolean)
+    const names = userProxies.map((p) => (p && typeof p.name === 'string' ? p.name : '')).filter(Boolean)
     const jp = names.filter((n) => /日本|japan|🇯🇵/i.test(n))
     const us = names.filter((n) => /美国|united ?states|🇺🇸/i.test(n))
     const base = jp.length > 0 ? jp : us
-    // 稳定节点排首位：组选择在 Verge 重新合成时可能被重置，此时默认落列表第一项。
-    // storefront 5/5 稳定的 IEPL/专线节点优先（2026-11-17 实测），普通节点殿后。
     const rank = (n) => (/IEPL|专线|iepl/i.test(n) ? 0 : 1)
     return [...base].sort((a, b) => rank(a) - rank(b))
   })()
 
-  if (appStoreNodes.length > 0) {
-    // 插在 OrbStack 直连之后、其余规则之前：进程级直连优先级始终最高。
-    const orbStackIndex = rules.findIndex((r) => r.includes('OrbStack Helper'))
-    const at = orbStackIndex >= 0 ? orbStackIndex + 1 : 0
-    // CDN 大文件域先于 API 域。2026-11-17 实测：直连 CDN 入口对真实文件请求
-    // （带签名 accessKey 的 GET）超时，只能走代理；大文件中途 EOF 是节点问题，
-    // 通过选稳定节点（IEPL）解决，而不是把 CDN 指向直连。
-    // 2026-11-18：Apple 官方域名一律直连，绝不进代理。
-    // 代理出口会改写下载会话绑定的出口 IP，出现 storefront 404 / redownload 403 / 中途 EOF。
-    // 只列商店与 CDN 真正用到的域名：apple.com 整域直连会连带影响 iCloud、
-    // 推送等需要代理的 Apple 服务，范围要收窄。
-    rules.splice(
-      at,
-      0,
-      'DOMAIN,adsdk.apple.com,拒绝',
-      'DOMAIN-SUFFIX,mzstatic.com,直连',
-      'DOMAIN,iosapps.itunes.apple.com,直连',
-      'DOMAIN-SUFFIX,itunes.apple.com,直连',
-      'DOMAIN-SUFFIX,itunes.com,直连',
-      'DOMAIN-SUFFIX,appldnld.apple.com,直连',
-      'DOMAIN,xp.apple.com,直连',
-      'DOMAIN-SUFFIX,aaplimg.com,直连'
-    )
-    functionalGroups.unshift({
-      ...groupBaseOption,
-      name: 'App Store',
-      // 必须是 select（单出口）而不是 fallback/url-test：Apple 下载会话 token 绑定出口 IP，
-      // 组内任何自动切换都会让同一会话跨出口 → AMS 301 / HTTP 403（2026-11-17 实测，
-      // fallback 120s 健康检查期间组内漂移导致组件报 redownload 403）。
-      // 健康检查仍探 storefront 端点（CN/HK 出口 404 判失败），只用于 Verge 面板显示，
-      // 不自动切换：节点坏了用户在面板手动换，换来的是会话全程出口稳定。
-      type: 'select',
-      url: 'https://itunes.apple.com/WebObjects/MZStore.woa/wa/availableStoreFronts',
-      interval: 300,
-      // IEPL 专线排最前：storefront 5/5 稳定（普通节点 2~3/5 间歇 EOF）。
-      // select 组默认取第一项，重启/重新合成后自动回到专线。
-      proxies: ['直连'],
-      icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png',
-    })
-  }
+  // 插在 OrbStack 直连之后、其余规则之前：进程级直连优先级始终最高。
+  // 只列商店与 CDN 真正用到的域名，避免影响 iCloud、推送等需要代理的 Apple 服务。
+  const orbStackIndex = rules.findIndex((r) => r.includes('OrbStack Helper'))
+  const at = orbStackIndex >= 0 ? orbStackIndex + 1 : 0
+  rules.splice(
+    at,
+    0,
+    'DOMAIN,adsdk.apple.com,拒绝',
+    'DOMAIN-SUFFIX,mzstatic.com,App Store',
+    'DOMAIN,iosapps.itunes.apple.com,App Store',
+    'DOMAIN-SUFFIX,itunes.apple.com,App Store',
+    'DOMAIN-SUFFIX,itunes.com,App Store',
+    'DOMAIN-SUFFIX,appldnld.apple.com,App Store',
+    'DOMAIN,xp.apple.com,App Store',
+    'DOMAIN-SUFFIX,aaplimg.com,App Store'
+  )
+  functionalGroups.unshift({
+    ...groupBaseOption,
+    name: 'App Store',
+    // 必须是 select（单出口）而不是 fallback/url-test：Apple 下载会话 token 绑定出口 IP，
+    // 自动切换会导致 redownload 403。默认首位为「直连」，需要时可在面板手动切至 JP/US 专线。
+    type: 'select',
+    url: 'https://itunes.apple.com/WebObjects/MZStore.woa/wa/availableStoreFronts',
+    interval: 300,
+    proxies: ['直连', ...appStoreNodes],
+    icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png',
+  })
 
   // 3.5 微信/腾讯直连：改用 blackmatrix7 WeChat 规则集（上游自动更新，免自维护）。
   //     背景：微信客户端对海外 CDN（Tencent Cloud 国际段）走裸 IP、无 SNI，域名规则
@@ -2649,7 +2618,6 @@ function main(config) {
       type: 'select',
       proxies: ['手动选择', '国内网站', ...regionGroupNames],
       icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Streaming!CN.png',
-      rules: ['GEOSITE,geolocation-!cn,其他外网'],
     },
     {
       ...groupBaseOption,
@@ -2685,7 +2653,7 @@ function main(config) {
   ]
 
   config['rules'] = rules
-  config['rule-providers'] = ruleProviders
+  config['rule-providers'] = localRuleProviders
 
   return config
 }
