@@ -27,7 +27,71 @@ VERGE_APP="/Applications/Clash Verge.app"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 USER_LOCAL_PROXY="${LOCAL_PROXY:-}"
 
-step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+progress_bar() {
+    local cur="$1" tot="$2" label="$3" width="${4:-20}"
+    local pct=$(( cur * 100 / tot ))
+    local filled=$(( cur * width / tot ))
+    local empty=$(( width - filled ))
+    local bar="" i=0
+    while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i + 1)); done
+    i=0
+    while [ "$i" -lt "$empty" ]; do bar="${bar}░"; i=$((i + 1)); done
+    printf '\n\033[1;34m[%s] %3d%% (%s/%s) %s\033[0m\n' "$bar" "$pct" "$cur" "$tot" "$label"
+}
+
+progress_inline() {
+    local cur="$1" tot="$2" label="$3" width="${4:-20}"
+    local pct=$(( cur * 100 / tot ))
+    local filled=$(( cur * width / tot ))
+    local empty=$(( width - filled ))
+    local bar="" i=0
+    while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i + 1)); done
+    i=0
+    while [ "$i" -lt "$empty" ]; do bar="${bar}░"; i=$((i + 1)); done
+    if [ -t 1 ]; then
+        printf '\r\033[K\033[0;36m  [%s] %3d%% %s\033[0m' "$bar" "$pct" "$label"
+    else
+        printf '  [%s] %3d%% %s\n' "$bar" "$pct" "$label"
+    fi
+}
+
+run_with_spinner() {
+    local label="$1"; shift
+    local log
+    log=$(mktemp "${TMPDIR:-/tmp}/verge-spin.XXXXXX")
+    if [ ! -t 1 ]; then
+        printf '  → %s…\n' "$label"
+        if "$@" >"$log" 2>&1; then
+            rm -f "$log"; return 0
+        else
+            local rc=$?; cat "$log" >&2; rm -f "$log"; return "$rc"
+        fi
+    fi
+    "$@" >"$log" 2>&1 &
+    local pid=$!
+    local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local idx=0 start_ts
+    start_ts=$(date +%s)
+    while kill -0 "$pid" 2>/dev/null; do
+        local elapsed=$(( $(date +%s) - start_ts ))
+        printf '\r\033[K\033[0;36m  %s %s (%ds)\033[0m' "${frames[$idx]}" "$label" "$elapsed"
+        idx=$(( (idx + 1) % 10 ))
+        sleep 0.15
+    done
+    local rc=0
+    wait "$pid" || rc=$?
+    local elapsed=$(( $(date +%s) - start_ts ))
+    if [ "$rc" -eq 0 ]; then
+        printf '\r\033[K\033[1;32m  ✓ %s (%ds)\033[0m\n' "$label" "$elapsed"
+    else
+        printf '\r\033[K\033[1;31m  ✗ %s 失败 (%ds)\033[0m\n' "$label" "$elapsed" >&2
+        cat "$log" >&2
+    fi
+    rm -f "$log"
+    return "$rc"
+}
+
+step() { progress_bar "$1" "$2" "$3"; }
 ok()   { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m  ⚠ %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m  ✗ %s\033[0m\n' "$*" >&2; exit 1; }
@@ -76,7 +140,6 @@ PY
 }
 
 verge_api() {
-    # $1=METHOD $2=PATH [$3=JSON_BODY]
     local method="$1" path="$2" body="${3:-}"
     local svc_sock="/var/run/clash-verge-service/users/$(id -u)/verge-mihomo.sock"
     local sock=""
@@ -104,15 +167,21 @@ verge_api() {
     return 1
 }
 
-step "1/5 检查依赖与读取 Verge 配置"
+step 1 5 "宿主机：检查依赖与读取 Verge 配置"
 [ -d "$VERGE_APP" ] || die "未找到 Clash Verge（${VERGE_APP}）。请先安装 Clash Verge Rev 并导入订阅后再运行本脚本。"
 ok "Clash Verge 已安装"
 command -v node >/dev/null 2>&1 || die "未安装 Node.js（deploy.sh 语法与合成校验需要）。"
 ok "Node.js 就绪"
 
 if ! pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
-    warn "Clash Verge 未在运行，尝试启动…"
-    open -a "Clash Verge"; sleep 6
+    warn "Clash Verge 未在运行，正在启动…"
+    open -a "Clash Verge"
+    for i in $(seq 1 8); do
+        progress_inline "$i" 8 "等待 Clash Verge 启动 (${i}s/8s)"
+        pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 && break
+        sleep 1
+    done
+    [ -t 1 ] && printf '\r\033[K'
     pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || die "Clash Verge 启动失败，请手动打开后重试。"
 fi
 ok "Clash Verge 运行中"
@@ -124,12 +193,12 @@ if [ "$VERGE_BUILTIN_ENHANCED" = "false" ]; then
     warn "检测到 verge.yaml 中 enable_builtin_enhanced=false，请在 Verge 设置中开启「全局扩展脚本」否则 Script.js 不会生效"
 fi
 
-step "2/5 更新仓库"
+step 2 5 "宿主机：更新 my-proxy-configs 仓库"
 cd "$REPO_DIR"
-if git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null; then
-    ok "仓库已通过代理更新: ${REPO_DIR}"
-elif git pull --ff-only origin main 2>/dev/null; then
-    ok "仓库已直连更新: ${REPO_DIR}"
+if run_with_spinner "通过代理拉取 my-proxy-configs" git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main; then
+    :
+elif run_with_spinner "直连拉取 my-proxy-configs" git pull --ff-only origin main; then
+    :
 else
     warn "仓库更新失败，使用本地现有版本继续: ${REPO_DIR}"
 fi
@@ -137,7 +206,7 @@ fi
 [ -f "$CONFIG_DIR/global_script.js" ] || die "未找到 $CONFIG_DIR/global_script.js"
 cd "$SCRIPT_DIR"
 
-step "3/5 检测默认路由接口"
+step 3 5 "宿主机：检测默认路由接口"
 IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' || true)
 case "$IFACE" in
     en*|eth*)
@@ -153,24 +222,21 @@ case "$IFACE" in
         warn "默认接口是 ${IFACE}（非典型物理网卡），请确认 Verge 接口绑定无误"
         ;;
 esac
-# 说明：本 fork 的 INFRASTRUCTURE_TAKEOVER=false，不接管 interface-name——
-# 该值由 Clash Verge 自己注入/管理，脚本无需（也不该）写入网卡名。
 
-step "4/5 部署到 Verge"
+step 4 5 "宿主机：校验并部署 Script.js 到 Verge"
 SCRIPT_CHANGED=1
 if [ -f "$VERGE_DATA/profiles/Script.js" ] && diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/null 2>&1; then
     SCRIPT_CHANGED=0
 fi
 
-./deploy.sh
+run_with_spinner "JS 语法与 verge-mihomo 内核校验并写入 Script.js" ./deploy.sh
 
 [ -f "$VERGE_DATA/profiles/Script.js" ] && ok "Script.js 已就位" || die "部署后未找到 Script.js"
 diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/null && ok "部署内容与仓库一致" || warn "部署内容与仓库有差异（deploy.sh 有备份机制，可回查）"
 
-step "5/5 自动重载与宿主机验收"
+step 5 5 "宿主机：自动重载与验收"
 NEED_RESTART="$SCRIPT_CHANGED"
 if [ "$NEED_RESTART" = "0" ]; then
-    # 即使脚本未变，若当前运行规则首位不是 OrbStack Helper 也需要重载
     FIRST_LIVE=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print((r[0].get("payload","") + "," + r[0].get("proxy","")) if r else "")' 2>/dev/null || true)
     if [ -n "$FIRST_LIVE" ] && [[ "$FIRST_LIVE" != *"OrbStack Helper"* ]]; then
         NEED_RESTART=1
@@ -178,20 +244,22 @@ if [ "$NEED_RESTART" = "0" ]; then
 fi
 
 if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
-    echo "  正在重启 Clash Verge 使新 Script.js 立即生效…"
     osascript -e 'quit app "Clash Verge"' >/dev/null 2>&1 || true
-    for _ in $(seq 1 8); do
+    for i in $(seq 1 8); do
+        progress_inline "$i" 28 "正在退出旧 Clash Verge (${i}s)"
         pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || break
         sleep 1
     done
     open -a "Clash Verge"
-    for _ in $(seq 1 20); do
+    for i in $(seq 1 20); do
+        progress_inline "$((8 + i))" 28 "等待 Clash Verge 重载配置 (${i}s/20s)"
         if pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
             eval "$(read_verge_meta)"
             verge_api GET /configs >/dev/null && break
         fi
         sleep 1
     done
+    [ -t 1 ] && printf '\r\033[K'
     ok "Clash Verge 已重启加载配置"
 elif [ "$NEED_RESTART" = "0" ]; then
     ok "Script.js 未变更且当前规则已就位，无需重启 Clash Verge"
@@ -199,13 +267,10 @@ else
     warn "NO_RESTART_VERGE=1：已跳过自动重启，请手动在 Verge 里「重新应用当前配置」"
 fi
 
-# 重新读取可能更新后的端口/控制器信息
 eval "$(read_verge_meta)"
 LOCAL_PROXY="${USER_LOCAL_PROXY:-http://127.0.0.1:${VERGE_MIXED_PORT}}"
 
-API_OK=0
 if CFG_JSON=$(verge_api GET /configs); then
-    API_OK=1
     CUR_MODE=$(printf '%s' "$CFG_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("mode",""))' 2>/dev/null || true)
     if [ "$CUR_MODE" != "rule" ]; then
         warn "当前 Verge 模式为 '${CUR_MODE}'，正在自动切换为规则模式 (rule)…"
@@ -232,7 +297,6 @@ if CFG_JSON=$(verge_api GET /configs); then
         warn "未在运行中检测到 google-ai provider（若首次加载可稍等几秒或在 Verge 中刷新规则集）"
     fi
 else
-    # 控制器不可访问时（如权限受限），回退检查 Verge 合成后的 clash-verge.yaml
     if [ -f "$VERGE_DATA/clash-verge.yaml" ]; then
         VERGE_DATA="$VERGE_DATA" python3 - <<'PY'
 import os, pathlib, re
@@ -250,9 +314,8 @@ PY
     fi
 fi
 
-# 代理连通性快速抽检（不阻断部署）
-if curl -s -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null 2>/dev/null; then
-    ok "经宿主机代理 (${LOCAL_PROXY}) 访问 gemini.google.com 正常"
+if run_with_spinner "探访 gemini.google.com（经 ${LOCAL_PROXY}）" curl -fsS -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null; then
+    :
 else
     warn "经 ${LOCAL_PROXY} 探访 gemini.google.com 超时（若尚未选中可用节点属正常）"
 fi
