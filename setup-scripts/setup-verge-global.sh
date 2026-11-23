@@ -45,7 +45,7 @@ step "2/5 更新仓库"
 cd "$REPO_DIR"
 git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null \
     || warn "仓库更新失败，使用本地现有版本继续"
-ok "仓库位置: $REPO_DIR（已尝试更新）"
+ok "仓库位置: ${REPO_DIR}（已尝试更新）"
 [ -f "$SCRIPT_DIR/deploy.sh" ] || die "未找到 $SCRIPT_DIR/deploy.sh"
 [ -f "$CONFIG_DIR/global_script.js" ] || die "未找到 $CONFIG_DIR/global_script.js"
 cd "$SCRIPT_DIR"
@@ -55,7 +55,7 @@ IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
 [ -n "$IFACE" ] || die "无法检测默认路由接口（网络未连接？）"
 case "$IFACE" in
     en*|eth*) ok "默认物理接口: $IFACE" ;;
-    *) die "默认接口是 $IFACE（非物理网卡），请人工确认网络环境";;
+    *) die "默认接口是 ${IFACE}（非物理网卡），请人工确认网络环境";;
 esac
 # 说明：本 fork 的 INFRASTRUCTURE_TAKEOVER=false，不接管 interface-name——
 # 该值由 Clash Verge 自己注入/管理，脚本无需（也不该）写入网卡名。
@@ -95,4 +95,4 @@ cat <<'EOF'
      其余分流不受影响。
 
 EOF
-echo "完成。部署脚本: $SCRIPT_DIR；配置: $CONFIG_DIR"
+echo "完成。部署脚本: ${SCRIPT_DIR}；配置: $CONFIG_DIR"
