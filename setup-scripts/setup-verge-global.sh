@@ -3,7 +3,7 @@
 #
 # 做什么：
 #   1. 检查依赖（Clash Verge Rev 是否安装/运行）
-#   2. 克隆/更新 my-proxy-configs 仓库（部署脚本在 setup-scripts/，配置在 global-script/）
+#   2. 更新 my-proxy-configs 仓库（脚本从自身位置定位仓库，部署脚本在 setup-scripts/，配置在 global-script/）
 #   3. 自动检测默认物理网卡并写入脚本（interface-name）
 #   4. deploy.sh 部署到 Verge（含语法校验）
 #   5. 提示重启 Verge 并做验收（规则链顺序 + 谷歌AI provider 拉取 + git 代理）
@@ -18,8 +18,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/peanutgao/my-proxy-configs.git"
-REPO_DIR="$HOME/Documents/work/ai-env/my-proxy-configs"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT_DIR="$REPO_DIR/setup-scripts"
 CONFIG_DIR="$REPO_DIR/global-script"
 VERGE_APP="/Applications/Clash Verge.app"
@@ -42,16 +41,11 @@ if ! pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
 fi
 ok "Clash Verge 运行中"
 
-step "2/5 获取脚本仓库"
-if [ -d "$REPO_DIR/.git" ]; then
-    cd "$REPO_DIR"
-    git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null \
-        || warn "仓库更新失败，使用本地现有版本继续"
-    ok "已有 my-proxy-configs 本地副本，已尝试更新"
-else
-    git -c http.proxy="$LOCAL_PROXY" clone "$REPO_URL" "$REPO_DIR" || die "克隆失败（网络/权限），检查后重试"
-    ok "已克隆到 $REPO_DIR"
-fi
+step "2/5 更新仓库"
+cd "$REPO_DIR"
+git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null \
+    || warn "仓库更新失败，使用本地现有版本继续"
+ok "仓库位置: $REPO_DIR（已尝试更新）"
 [ -f "$SCRIPT_DIR/deploy.sh" ] || die "未找到 $SCRIPT_DIR/deploy.sh"
 [ -f "$CONFIG_DIR/global_script.js" ] || die "未找到 $CONFIG_DIR/global_script.js"
 cd "$SCRIPT_DIR"
