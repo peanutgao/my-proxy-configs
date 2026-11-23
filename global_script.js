@@ -2005,21 +2005,16 @@ const serviceConfigs = [
     name: '谷歌AI',
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google.png',
     url: 'https://gemini.google.com/',
-    rules: [
-      'DOMAIN-SUFFIX,antigravity.google,谷歌AI',
-      'DOMAIN-SUFFIX,antigravity-unleash.goog,谷歌AI',
-      'DOMAIN,antigravity-pa.googleapis.com,谷歌AI',
-      'DOMAIN,antigravity.googleapis.com,谷歌AI',
-      'DOMAIN,cloudcode-pa.googleapis.com,谷歌AI',
-      'DOMAIN,aiplatform.googleapis.com,谷歌AI',
-      'DOMAIN-SUFFIX,generativelanguage.googleapis.com,谷歌AI',
-      'DOMAIN-SUFFIX,aistudio.google.com,谷歌AI',
-      'DOMAIN-SUFFIX,gemini.google.com,谷歌AI',
-      'DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com,谷歌AI',
-      'DOMAIN-SUFFIX,ai.google.dev,谷歌AI',
-      'DOMAIN-SUFFIX,deepmind.google,谷歌AI',
-      'DOMAIN-SUFFIX,deepmind.com,谷歌AI',
-      'GEOSITE,google-gemini,谷歌AI',
+    // 2026-11-22: 规则源改为 my-scripts 公开仓库（手机端 Stash/Shadowrocket 同源引用）
+    rules: ['RULE-SET,google-ai,谷歌AI'],
+    providers: [
+      {
+        key: 'google-ai',
+        url: 'https://raw.githubusercontent.com/peanutgao/my-scripts/main/clash-rules/google-ai.list',
+        path: './ruleset/my-scripts/google-ai.list',
+        format: 'text',
+        behavior: 'classical',
+      },
     ],
   },
   {
