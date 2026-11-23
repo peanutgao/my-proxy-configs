@@ -1,7 +1,7 @@
 #!/bin/bash
 # sync-to-my-scripts.sh —— 把 verge-global-script 的最新内容同步到 my-scripts 公开仓库
 #
-# 背景：verge 分流脚本的部署源在本地 `~/Documents/work/personal-project/verge-global-script`
+# 背景：verge 分流脚本的部署源在本地 `~/Documents/work/ai-env/verge-global-script`
 # （deploy.sh 从这里部署到 Verge），公开仓库 my-scripts/verge-global-script/ 是它的对外副本。
 # 改完脚本跑本脚本一次即可完成「同步 + 提交 + 推送」。
 #
@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-SRC="$HOME/Documents/work/personal-project/verge-global-script"
-DST="$HOME/Documents/work/personal-project/my-scripts/verge-global-script"
+SRC="$HOME/Documents/work/ai-env/verge-global-script"
+DST="$HOME/Documents/work/ai-env/my-scripts/verge-global-script"
 
 step() { printf '\033[1;34m==> %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }
