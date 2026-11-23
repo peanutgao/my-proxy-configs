@@ -3,23 +3,23 @@
 set -eu
 HERE=$(cd "$(dirname "$0")/../global-script" && pwd)
 SRC="$HERE/global_script.js"
-VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+VERGE_DATA="${VERGE_DATA:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 TARGET="$VERGE_DATA/profiles/Script.js"
 KERNEL="/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo"
 
 command -v node >/dev/null 2>&1 || { echo "未安装 Node.js，无法执行语法校验"; exit 1; }
 
-# 1. JS 语法校验（通过 argv 传路径，避免路径含引号导致注入/语法错）
-node -e "new Function(require('fs').readFileSync(process.argv[1],'utf8'))" "$SRC" \
+# 1. JS 语法校验（通过环境变量传路径，避免 argv 偏移或路径含引号导致错误）
+DEPLOY_SRC="$SRC" node -e "new Function(require('fs').readFileSync(process.env.DEPLOY_SRC,'utf8'))" \
     || { echo "语法错误，未部署"; exit 1; }
 
 # 2. 用模拟配置运行 main()，再由 verge-mihomo -t 做真实内核校验（YAML/规则/分组/provider 完整性）
 TMP_CFG=$(mktemp "${TMPDIR:-/tmp}/verge-script-check.XXXXXX.yaml")
 trap 'rm -f "$TMP_CFG"' EXIT
 
-node - "$SRC" "$TMP_CFG" <<'NODE'
+DEPLOY_SRC="$SRC" DEPLOY_OUT="$TMP_CFG" node <<'NODE'
 const fs = require('fs')
-const code = fs.readFileSync(process.argv[1], 'utf8')
+const code = fs.readFileSync(process.env.DEPLOY_SRC, 'utf8')
 const mainFn = new Function(code + '\nreturn main;')()
 const sample = {
   'mixed-port': 6152,
@@ -41,7 +41,7 @@ const otherGroup = (out['proxy-groups'] || []).find((g) => g.name === '其他节
 if (otherGroup && (otherGroup.proxies || []).some((n) => n === '直连' || n === '拒绝')) {
   throw new Error('内置节点误混入其他节点组')
 }
-fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 2))
+fs.writeFileSync(process.env.DEPLOY_OUT, JSON.stringify(out, null, 2))
 NODE
 
 if [ -x "$KERNEL" ]; then
