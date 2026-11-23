@@ -19,7 +19,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/peanutgao/verge-global-script.git"
-INSTALL_DIR="$HOME/Documents/work/personal-project/verge-global-script"
+INSTALL_DIR="$HOME/Documents/work/ai-env/verge-global-script"
 VERGE_APP="/Applications/Clash Verge.app"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 LOCAL_PROXY="http://127.0.0.1:6152"
