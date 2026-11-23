@@ -2,15 +2,16 @@
 # setup-verge-global.sh —— 新 Mac 上一键部署 Clash Verge 全局分流脚本（global-script）
 #
 # 做什么：
-#   1. 检查依赖（Clash Verge Rev 是否安装/运行，Node.js 是否可用）
-#   2. 更新 my-proxy-configs 仓库（脚本从自身位置定位仓库，部署脚本在 setup-scripts/，配置在 global-script/）
-#   3. 检测当前默认路由接口并给出核对提示（本脚本不修改 interface-name）
-#   4. deploy.sh 部署到 Verge（含 JS 语法与 mihomo 内核校验）
-#   5. 提示重启 Verge 并做验收（规则链顺序 + 谷歌AI provider 拉取 + git 代理）
+#   1. 检查依赖（Clash Verge Rev 是否安装/运行，Node.js 是否可用）并自动读取 Verge 端口/控制器配置
+#   2. 更新 my-proxy-configs 仓库（代理优先，失败自动回退直连）
+#   3. 检测默认路由接口并检查 Verge 全局扩展脚本开关
+#   4. deploy.sh 部署到 Verge（含 JS 语法与 verge-mihomo -t 内核校验）
+#   5. 自动重载 Verge、切回规则模式并执行宿主机 3 项验收
 #
 # 用法：
 #   bash setup-verge-global.sh
 #   LOCAL_PROXY=http://127.0.0.1:7897 bash setup-verge-global.sh
+#   NO_RESTART_VERGE=1 bash setup-verge-global.sh   # 跳过自动重启 Verge
 #
 # 不做什么：
 #   - 不安装 Clash Verge 本体（请先自行安装并导入订阅）
@@ -24,14 +25,86 @@ SCRIPT_DIR="$REPO_DIR/setup-scripts"
 CONFIG_DIR="$REPO_DIR/global-script"
 VERGE_APP="/Applications/Clash Verge.app"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
-LOCAL_PROXY="${LOCAL_PROXY:-http://127.0.0.1:6152}"
+USER_LOCAL_PROXY="${LOCAL_PROXY:-}"
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m  ⚠ %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m  ✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-step "1/5 检查依赖"
+read_verge_meta() {
+    VERGE_DATA="$VERGE_DATA" python3 - <<'PY'
+import os, pathlib, re, shlex
+
+vd = pathlib.Path(os.environ['VERGE_DATA'])
+
+def scalar(path, key):
+    if not path.is_file():
+        return ''
+    for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
+        m = re.match(rf'^{re.escape(key)}\s*:\s*(.*)$', line)
+        if m:
+            val = m.group(1).strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+                val = val[1:-1]
+            return val
+    return ''
+
+mixed_port = (
+    scalar(vd / 'clash-verge.yaml', 'mixed-port')
+    or scalar(vd / 'config.yaml', 'mixed-port')
+    or '6152'
+)
+ctrl = scalar(vd / 'config.yaml', 'external-controller') or '127.0.0.1:9097'
+if ctrl.startswith(':'):
+    ctrl = '127.0.0.1' + ctrl
+elif ctrl.startswith('0.0.0.0:'):
+    ctrl = '127.0.0.1:' + ctrl.split(':', 1)[1]
+secret = scalar(vd / 'config.yaml', 'secret') or scalar(vd / 'clash-verge.yaml', 'secret')
+unix_sock = scalar(vd / 'clash-verge.yaml', 'external-controller-unix')
+builtin_enh = scalar(vd / 'verge.yaml', 'enable_builtin_enhanced')
+
+for k, v in (
+    ('VERGE_MIXED_PORT', mixed_port),
+    ('VERGE_CTRL_ADDR', ctrl),
+    ('VERGE_CTRL_SECRET', secret),
+    ('VERGE_UNIX_SOCK', unix_sock),
+    ('VERGE_BUILTIN_ENHANCED', builtin_enh),
+):
+    print(f'{k}={shlex.quote(v)}')
+PY
+}
+
+verge_api() {
+    # $1=METHOD $2=PATH [$3=JSON_BODY]
+    local method="$1" path="$2" body="${3:-}"
+    local svc_sock="/var/run/clash-verge-service/users/$(id -u)/verge-mihomo.sock"
+    local sock=""
+    if [ -S "$svc_sock" ] && [ -r "$svc_sock" ]; then
+        sock="$svc_sock"
+    elif [ -n "${VERGE_UNIX_SOCK:-}" ] && [ -S "$VERGE_UNIX_SOCK" ] && [ -r "$VERGE_UNIX_SOCK" ]; then
+        sock="$VERGE_UNIX_SOCK"
+    fi
+
+    local auth_args=()
+    [ -n "${VERGE_CTRL_SECRET:-}" ] && auth_args=(-H "Authorization: Bearer ${VERGE_CTRL_SECRET}")
+    local data_args=()
+    [ -n "$body" ] && data_args=(-H "Content-Type: application/json" -d "$body")
+
+    if [ -n "$sock" ]; then
+        curl -fsS --noproxy '*' --max-time 5 --unix-socket "$sock" -X "$method" \
+            ${auth_args[@]+"${auth_args[@]}"} ${data_args[@]+"${data_args[@]}"} \
+            "http://localhost${path}" 2>/dev/null && return 0
+    fi
+    if [ -n "${VERGE_CTRL_ADDR:-}" ]; then
+        curl -fsS --noproxy '*' --max-time 5 -X "$method" \
+            ${auth_args[@]+"${auth_args[@]}"} ${data_args[@]+"${data_args[@]}"} \
+            "http://${VERGE_CTRL_ADDR}${path}" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+step "1/5 检查依赖与读取 Verge 配置"
 [ -d "$VERGE_APP" ] || die "未找到 Clash Verge（${VERGE_APP}）。请先安装 Clash Verge Rev 并导入订阅后再运行本脚本。"
 ok "Clash Verge 已安装"
 command -v node >/dev/null 2>&1 || die "未安装 Node.js（deploy.sh 语法与合成校验需要）。"
@@ -43,6 +116,13 @@ if ! pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
     pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || die "Clash Verge 启动失败，请手动打开后重试。"
 fi
 ok "Clash Verge 运行中"
+
+eval "$(read_verge_meta)"
+LOCAL_PROXY="${USER_LOCAL_PROXY:-http://127.0.0.1:${VERGE_MIXED_PORT}}"
+ok "已识别 Verge 代理端口: ${VERGE_MIXED_PORT}（LOCAL_PROXY=${LOCAL_PROXY}）"
+if [ "$VERGE_BUILTIN_ENHANCED" = "false" ]; then
+    warn "检测到 verge.yaml 中 enable_builtin_enhanced=false，请在 Verge 设置中开启「全局扩展脚本」否则 Script.js 不会生效"
+fi
 
 step "2/5 更新仓库"
 cd "$REPO_DIR"
@@ -75,40 +155,109 @@ case "$IFACE" in
 esac
 # 说明：本 fork 的 INFRASTRUCTURE_TAKEOVER=false，不接管 interface-name——
 # 该值由 Clash Verge 自己注入/管理，脚本无需（也不该）写入网卡名。
-# 若新机器 Clash Verge 里手动设置过「接口绑定」，请核对其与物理网卡一致。
 
 step "4/5 部署到 Verge"
+SCRIPT_CHANGED=1
+if [ -f "$VERGE_DATA/profiles/Script.js" ] && diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/null 2>&1; then
+    SCRIPT_CHANGED=0
+fi
+
 ./deploy.sh
 
 [ -f "$VERGE_DATA/profiles/Script.js" ] && ok "Script.js 已就位" || die "部署后未找到 Script.js"
 diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/null && ok "部署内容与仓库一致" || warn "部署内容与仓库有差异（deploy.sh 有备份机制，可回查）"
 
-step "5/5 验收提示"
-cat <<EOF
+step "5/5 自动重载与宿主机验收"
+NEED_RESTART="$SCRIPT_CHANGED"
+if [ "$NEED_RESTART" = "0" ]; then
+    # 即使脚本未变，若当前运行规则首位不是 OrbStack Helper 也需要重载
+    FIRST_LIVE=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print((r[0].get("payload","") + "," + r[0].get("proxy","")) if r else "")' 2>/dev/null || true)
+    if [ -n "$FIRST_LIVE" ] && [[ "$FIRST_LIVE" != *"OrbStack Helper"* ]]; then
+        NEED_RESTART=1
+    fi
+fi
 
-  自动部署完成。请手动完成最后一步并验收：
+if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
+    echo "  正在重启 Clash Verge 使新 Script.js 立即生效…"
+    osascript -e 'quit app "Clash Verge"' >/dev/null 2>&1 || true
+    for _ in $(seq 1 8); do
+        pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || break
+        sleep 1
+    done
+    open -a "Clash Verge"
+    for _ in $(seq 1 20); do
+        if pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
+            eval "$(read_verge_meta)"
+            verge_api GET /configs >/dev/null && break
+        fi
+        sleep 1
+    done
+    ok "Clash Verge 已重启加载配置"
+elif [ "$NEED_RESTART" = "0" ]; then
+    ok "Script.js 未变更且当前规则已就位，无需重启 Clash Verge"
+else
+    warn "NO_RESTART_VERGE=1：已跳过自动重启，请手动在 Verge 里「重新应用当前配置」"
+fi
 
-  A. 重启 Clash Verge（菜单栏退出 → 重新打开），或 Verge 里「重新应用当前配置」
-  B. 确认 Verge 处于「规则模式」（全局模式下规则链整体失效）
-  C. 终端验收（Verge 的 API：127.0.0.1:9097，secret 见 Verge 设置；默认 set-your-secret）：
-       SECRET=set-your-secret
-       # 1) 规则链首位必须是 OrbStack 直连（fork 特征）
-       curl -s -H "Authorization: Bearer \$SECRET" http://127.0.0.1:9097/rules | head -c 300
-       # 2) 谷歌AI provider 已从 my-proxy-configs 拉到规则
-       curl -s -H "Authorization: Bearer \$SECRET" http://127.0.0.1:9097/providers/rules | grep -o "google-ai[^,]*"
-       # 3) 实测命中：访问 gemini，链路应含「谷歌AI」组
-       curl -s -m 10 -x ${LOCAL_PROXY} https://gemini.google.com -o /dev/null
-       curl -s -H "Authorization: Bearer \$SECRET" http://127.0.0.1:9097/connections | grep -o "谷歌AI" | head -1
+# 重新读取可能更新后的端口/控制器信息
+eval "$(read_verge_meta)"
+LOCAL_PROXY="${USER_LOCAL_PROXY:-http://127.0.0.1:${VERGE_MIXED_PORT}}"
 
-  D. git 代理：本脚本拉取 my-proxy-configs 时优先尝试 LOCAL_PROXY=${LOCAL_PROXY}，失败则回退直连。
-     若新机器 Clash 端口不同，可传入 LOCAL_PROXY=http://127.0.0.1:<端口> 或配置：
-       git config --global http.proxy http://127.0.0.1:<你的mixed-port>
+API_OK=0
+if CFG_JSON=$(verge_api GET /configs); then
+    API_OK=1
+    CUR_MODE=$(printf '%s' "$CFG_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("mode",""))' 2>/dev/null || true)
+    if [ "$CUR_MODE" != "rule" ]; then
+        warn "当前 Verge 模式为 '${CUR_MODE}'，正在自动切换为规则模式 (rule)…"
+        if verge_api PATCH /configs '{"mode":"rule"}' >/dev/null; then
+            ok "已自动切换为规则模式 (rule)"
+        else
+            warn "自动切换规则模式失败，请在 Verge 面板手动切到「规则模式」"
+        fi
+    else
+        ok "Verge 运行模式: rule（规则模式）"
+    fi
 
-  E. 手机端共用规则源（无需部署）：
-       https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/rule-sets/clash/google-ai.list
+    RULE0=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print(f"{r[0].get(\"type\")},{r[0].get(\"payload\")},{r[0].get(\"proxy\")}" if r else "")' 2>/dev/null || true)
+    if [[ "$RULE0" == *"OrbStack Helper"* && "$RULE0" == *",直连" ]]; then
+        ok "首条规则已生效: ${RULE0}"
+    else
+        warn "首条规则未命中 OrbStack 直连（实际: ${RULE0:-空}），请确认 Verge 已选中订阅且启用全局扩展脚本"
+    fi
 
-  F. 若新机器不用 OrbStack/VM 固定出口，OrbStack 直连规则命中不了属正常（无此进程），
-     其余分流不受影响。
+    GAI_COUNT=$(verge_api GET /providers/rules | python3 -c 'import json,sys; p=(json.load(sys.stdin).get("providers") or {}).get("google-ai"); print(p.get("ruleCount","") if p else "")' 2>/dev/null || true)
+    if [ -n "$GAI_COUNT" ]; then
+        ok "google-ai 规则集已加载（${GAI_COUNT} 条规则）"
+    else
+        warn "未在运行中检测到 google-ai provider（若首次加载可稍等几秒或在 Verge 中刷新规则集）"
+    fi
+else
+    # 控制器不可访问时（如权限受限），回退检查 Verge 合成后的 clash-verge.yaml
+    if [ -f "$VERGE_DATA/clash-verge.yaml" ]; then
+        VERGE_DATA="$VERGE_DATA" python3 - <<'PY'
+import os, pathlib, re
+text = (pathlib.Path(os.environ['VERGE_DATA']) / 'clash-verge.yaml').read_text(encoding='utf-8', errors='replace')
+m_mode = re.search(r'^mode:\s*(\S+)', text, re.M)
+mode = m_mode.group(1) if m_mode else 'unknown'
+has_orb = 'OrbStack Helper,直连' in text
+has_gai = 'google-ai:' in text
+print(f'  {"✓" if mode == "rule" else "⚠"} clash-verge.yaml mode={mode}')
+print(f'  {"✓" if has_orb else "⚠"} clash-verge.yaml 含 OrbStack Helper 直连规则={has_orb}')
+print(f'  {"✓" if has_gai else "⚠"} clash-verge.yaml 含 google-ai provider={has_gai}')
+PY
+    else
+        warn "未能连接 Verge 控制器且未找到 clash-verge.yaml，请确认 Verge 已导入并选中订阅后在界面点「重新应用」"
+    fi
+fi
 
-EOF
-echo "完成。部署脚本: ${SCRIPT_DIR}；配置: $CONFIG_DIR"
+# 代理连通性快速抽检（不阻断部署）
+if curl -s -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null 2>/dev/null; then
+    ok "经宿主机代理 (${LOCAL_PROXY}) 访问 gemini.google.com 正常"
+else
+    warn "经 ${LOCAL_PROXY} 探访 gemini.google.com 超时（若尚未选中可用节点属正常）"
+fi
+
+echo ""
+echo "手机端共用规则源（无需部署）："
+echo "  https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/rule-sets/clash/google-ai.list"
+echo "完成。部署脚本: ${SCRIPT_DIR}；配置: ${CONFIG_DIR}"
