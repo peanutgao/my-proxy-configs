@@ -2010,7 +2010,7 @@ const serviceConfigs = [
     providers: [
       {
         key: 'google-ai',
-        url: 'https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/clash-rules/google-ai.list',
+        url: 'https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/rule-sets/clash/google-ai.list',
         path: './ruleset/my-proxy-configs/google-ai.list',
         format: 'text',
         behavior: 'classical',
@@ -2165,7 +2165,7 @@ const serviceConfigs = [
     providers: [
       {
         key: 'adblockmihomo',
-        url: 'https://github.com/217heidai/adblockfilters/raw/refs/heads/main/rules/adblockmihomo.mrs',
+        url: 'https://github.com/217heidai/adblockfilters/raw/refs/heads/main/rule-sets/adblockmihomo.mrs',
         path: './ruleset/adblockfilters/adblockmihomo.mrs',
         format: 'mrs',
         behavior: 'domain',

@@ -3,7 +3,7 @@
 #
 # 做什么：
 #   1. 检查依赖（Clash Verge Rev 是否安装/运行）
-#   2. 克隆/更新 my-proxy-configs 仓库（脚本在其 global-script/ 子目录）
+#   2. 克隆/更新 my-proxy-configs 仓库（部署脚本在 setup-scripts/，配置在 global-script/）
 #   3. 自动检测默认物理网卡并写入脚本（interface-name）
 #   4. deploy.sh 部署到 Verge（含语法校验）
 #   5. 提示重启 Verge 并做验收（规则链顺序 + 谷歌AI provider 拉取 + git 代理）
@@ -20,7 +20,8 @@ set -euo pipefail
 
 REPO_URL="https://github.com/peanutgao/my-proxy-configs.git"
 REPO_DIR="$HOME/Documents/work/ai-env/my-proxy-configs"
-SCRIPT_DIR="$REPO_DIR/global-script"
+SCRIPT_DIR="$REPO_DIR/setup-scripts"
+CONFIG_DIR="$REPO_DIR/global-script"
 VERGE_APP="/Applications/Clash Verge.app"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 LOCAL_PROXY="http://127.0.0.1:6152"
@@ -52,6 +53,7 @@ else
     ok "已克隆到 $REPO_DIR"
 fi
 [ -f "$SCRIPT_DIR/deploy.sh" ] || die "未找到 $SCRIPT_DIR/deploy.sh"
+[ -f "$CONFIG_DIR/global_script.js" ] || die "未找到 $CONFIG_DIR/global_script.js"
 cd "$SCRIPT_DIR"
 
 step "3/5 检测默认物理网卡"
@@ -69,7 +71,7 @@ step "4/5 部署到 Verge"
 ./deploy.sh
 
 [ -f "$VERGE_DATA/profiles/Script.js" ] && ok "Script.js 已就位" || die "部署后未找到 Script.js"
-diff -q global_script.js "$VERGE_DATA/profiles/Script.js" >/dev/null && ok "部署内容与仓库一致" || warn "部署内容与仓库有差异（deploy.sh 有备份机制，可回查）"
+diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/null && ok "部署内容与仓库一致" || warn "部署内容与仓库有差异（deploy.sh 有备份机制，可回查）"
 
 step "5/5 验收提示"
 cat <<'EOF'
@@ -93,10 +95,10 @@ cat <<'EOF'
        git config --global http.proxy http://127.0.0.1:<你的mixed-port>
 
   E. 手机端共用规则源（无需部署）：
-       https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/clash-rules/google-ai.list
+       https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/rule-sets/clash/google-ai.list
 
   F. 若新机器不用 OrbStack/VM 固定出口，OrbStack 直连规则命中不了属正常（无此进程），
      其余分流不受影响。
 
 EOF
-echo "完成。脚本目录: $SCRIPT_DIR"
+echo "完成。部署脚本: $SCRIPT_DIR；配置: $CONFIG_DIR"

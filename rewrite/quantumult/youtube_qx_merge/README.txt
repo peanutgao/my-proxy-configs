@@ -26,11 +26,11 @@ $response.bodyBytes 读二进制、通过 Content-Type 头判断格式。旧版�
    quantumult/youtube_qx_merge/merge.youtube.response.js
 
 2. 覆盖后打开 raw 地址检查，应显示多行文本（不是 Total lines: 1）：
-   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
-   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/quantumult/youtube_qx_merge/merge.youtube.response.js
+   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
+   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/rewrite/quantumult/youtube_qx_merge/merge.youtube.response.js
 
 3. Quantumult X 只订阅这一个 conf：
-   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
+   https://raw.githubusercontent.com/peanutgao/my-proxy-configs/refs/heads/main/rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
 
 4. 删除/关闭旧的 YoutubeAds.conf、DualSubs.YouTube.snippet/plugin，避免重复改写 player。
 

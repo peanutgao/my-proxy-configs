@@ -1,7 +1,7 @@
 #!/bin/sh
 # 部署到 Clash Verge 并做内核校验。失败不写入。
 set -eu
-HERE=$(cd "$(dirname "$0")" && pwd)
+HERE=$(cd "$(dirname "$0")/../global-script" && pwd)
 TARGET="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/profiles/Script.js"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 KERNEL="/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo"
