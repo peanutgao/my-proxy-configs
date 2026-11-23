@@ -1,0 +1,15 @@
+# =========================
+# OpenAI / ChatGPT
+# =========================
+DOMAIN-SUFFIX,openai.com
+DOMAIN-SUFFIX,chatgpt.com
+DOMAIN-SUFFIX,oaistatic.com
+DOMAIN-SUFFIX,oaiusercontent.com
+DOMAIN-SUFFIX,oaistatsig.com
+DOMAIN-SUFFIX,openaimerge.com
+DOMAIN-SUFFIX,sora.com
+
+# =========================
+# OpenAI CDN
+# =========================
+DOMAIN-SUFFIX,openaiapi-site.azureedge.net

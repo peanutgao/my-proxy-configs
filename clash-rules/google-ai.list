@@ -7,8 +7,8 @@
 #       type: http
 #       behavior: classical
 #       format: text
-#       url: https://raw.githubusercontent.com/peanutgao/my-scripts/main/clash-rules/google-ai.list
-#       path: ./ruleset/my-scripts/google-ai.list
+#       url: https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/clash-rules/google-ai.list
+#       path: ./ruleset/my-proxy-configs/google-ai.list
 #       interval: 86400
 #   rules:
 #     - RULE-SET,google-ai,你的AI策略组

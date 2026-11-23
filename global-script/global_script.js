@@ -2005,13 +2005,13 @@ const serviceConfigs = [
     name: '谷歌AI',
     icon: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google.png',
     url: 'https://gemini.google.com/',
-    // 2026-11-22: 规则源改为 my-scripts 公开仓库（手机端 Stash/Shadowrocket 同源引用）
+    // 2026-11-22: 规则源改为 my-proxy-configs 公开仓库（手机端 Stash/Shadowrocket 同源引用）
     rules: ['RULE-SET,google-ai,谷歌AI'],
     providers: [
       {
         key: 'google-ai',
-        url: 'https://raw.githubusercontent.com/peanutgao/my-scripts/main/clash-rules/google-ai.list',
-        path: './ruleset/my-scripts/google-ai.list',
+        url: 'https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/clash-rules/google-ai.list',
+        path: './ruleset/my-proxy-configs/google-ai.list',
         format: 'text',
         behavior: 'classical',
       },

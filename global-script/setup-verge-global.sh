@@ -1,9 +1,9 @@
 #!/bin/bash
-# setup-verge-global.sh —— 新 Mac 上一键部署 Clash Verge 全局分流脚本（verge-global-script）
+# setup-verge-global.sh —— 新 Mac 上一键部署 Clash Verge 全局分流脚本（global-script）
 #
 # 做什么：
 #   1. 检查依赖（Clash Verge Rev 是否安装/运行）
-#   2. 克隆脚本仓库（或更新已存在的本地副本）
+#   2. 克隆/更新 my-proxy-configs 仓库（脚本在其 global-script/ 子目录）
 #   3. 自动检测默认物理网卡并写入脚本（interface-name）
 #   4. deploy.sh 部署到 Verge（含语法校验）
 #   5. 提示重启 Verge 并做验收（规则链顺序 + 谷歌AI provider 拉取 + git 代理）
@@ -18,8 +18,9 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/peanutgao/verge-global-script.git"
-INSTALL_DIR="$HOME/Documents/work/ai-env/verge-global-script"
+REPO_URL="https://github.com/peanutgao/my-proxy-configs.git"
+REPO_DIR="$HOME/Documents/work/ai-env/my-proxy-configs"
+SCRIPT_DIR="$REPO_DIR/global-script"
 VERGE_APP="/Applications/Clash Verge.app"
 VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 LOCAL_PROXY="http://127.0.0.1:6152"
@@ -41,18 +42,17 @@ fi
 ok "Clash Verge 运行中"
 
 step "2/5 获取脚本仓库"
-if [ -d "$INSTALL_DIR/.git" ]; then
-    cd "$INSTALL_DIR"
-    git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin master 2>/dev/null \
-        || git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null \
+if [ -d "$REPO_DIR/.git" ]; then
+    cd "$REPO_DIR"
+    git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main 2>/dev/null \
         || warn "仓库更新失败，使用本地现有版本继续"
-    ok "已有本地副本，已尝试更新"
+    ok "已有 my-proxy-configs 本地副本，已尝试更新"
 else
-    mkdir -p "$(dirname "$INSTALL_DIR")"
-    git -c http.proxy="$LOCAL_PROXY" clone "$REPO_URL" "$INSTALL_DIR" || die "克隆失败（网络/权限），检查后重试"
-    cd "$INSTALL_DIR"
-    ok "已克隆到 $INSTALL_DIR"
+    git -c http.proxy="$LOCAL_PROXY" clone "$REPO_URL" "$REPO_DIR" || die "克隆失败（网络/权限），检查后重试"
+    ok "已克隆到 $REPO_DIR"
 fi
+[ -f "$SCRIPT_DIR/deploy.sh" ] || die "未找到 $SCRIPT_DIR/deploy.sh"
+cd "$SCRIPT_DIR"
 
 step "3/5 检测默认物理网卡"
 IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
@@ -82,21 +82,21 @@ cat <<'EOF'
        SECRET=set-your-secret
        # 1) 规则链首位必须是 OrbStack 直连（fork 特征）
        curl -s -H "Authorization: Bearer $SECRET" http://127.0.0.1:9097/rules | head -c 300
-       # 2) 谷歌AI provider 已从 my-scripts 拉到 14 条规则
+       # 2) 谷歌AI provider 已从 my-proxy-configs 拉到 14 条规则
        curl -s -H "Authorization: Bearer $SECRET" http://127.0.0.1:9097/providers/rules | grep -o "google-ai[^,]*"
        # 3) 实测命中：访问 gemini，链路应含「谷歌AI」组
        curl -s -m 10 -x http://127.0.0.1:6152 https://gemini.google.com -o /dev/null
        curl -s -H "Authorization: Bearer $SECRET" http://127.0.0.1:9097/connections | grep -o "谷歌AI" | head -1
 
-  D. git 代理（本仓库已写入仓库级 http.proxy=127.0.0.1:6152），
-     若新机器 Clash 端口不是 6152，执行：
-       git config http.proxy http://127.0.0.1:<你的mixed-port>
+  D. git 代理：本脚本拉取 my-proxy-configs 时用 http.proxy=127.0.0.1:6152。
+     若新机器 Clash 端口不是 6152，先执行：
+       git config --global http.proxy http://127.0.0.1:<你的mixed-port>
 
   E. 手机端共用规则源（无需部署）：
-       https://raw.githubusercontent.com/peanutgao/my-scripts/main/clash-rules/google-ai.list
+       https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/clash-rules/google-ai.list
 
   F. 若新机器不用 OrbStack/VM 固定出口，OrbStack 直连规则命中不了属正常（无此进程），
      其余分流不受影响。
 
 EOF
-echo "完成。仓库: $INSTALL_DIR"
+echo "完成。脚本目录: $SCRIPT_DIR"

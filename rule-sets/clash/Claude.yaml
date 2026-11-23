@@ -1,0 +1,6 @@
+payload:
+  # =========================
+  # Claude Web / API
+  # =========================
+  - DOMAIN-SUFFIX,anthropic.com
+  - DOMAIN-SUFFIX,claude.ai
