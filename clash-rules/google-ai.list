@@ -1,0 +1,29 @@
+# Google AI 分流规则（Gemini / Antigravity / AI Studio / DeepMind）
+# 适用：Clash Meta(mihomo) rule-provider / Stash / Shadowrocket 等
+# 格式：classical text（每行 类型,值）
+# 用法示例（mihomo）:
+#   rule-providers:
+#     google-ai:
+#       type: http
+#       behavior: classical
+#       format: text
+#       url: https://raw.githubusercontent.com/peanutgao/my-scripts/main/clash-rules/google-ai.list
+#       path: ./ruleset/my-scripts/google-ai.list
+#       interval: 86400
+#   rules:
+#     - RULE-SET,google-ai,你的AI策略组
+# 注意：GEOSITE,google-gemini 需 mihomo / Stash(geosite 数据)；Shadowrocket 不支持时删除该行
+DOMAIN-SUFFIX,antigravity.google
+DOMAIN-SUFFIX,antigravity-unleash.goog
+DOMAIN,antigravity-pa.googleapis.com
+DOMAIN,antigravity.googleapis.com
+DOMAIN,cloudcode-pa.googleapis.com
+DOMAIN,aiplatform.googleapis.com
+DOMAIN-SUFFIX,generativelanguage.googleapis.com
+DOMAIN-SUFFIX,aistudio.google.com
+DOMAIN-SUFFIX,gemini.google.com
+DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com
+DOMAIN-SUFFIX,ai.google.dev
+DOMAIN-SUFFIX,deepmind.google
+DOMAIN-SUFFIX,deepmind.com
+GEOSITE,google-gemini
