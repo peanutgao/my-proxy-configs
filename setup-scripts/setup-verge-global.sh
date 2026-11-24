@@ -355,7 +355,7 @@ PY
     fi
 fi
 
-if run_with_spinner "探访 gemini.google.com（经 ${LOCAL_PROXY}）" curl -fsS -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null; then
+if run_with_spinner "探访 gemini.google.com（经 ${LOCAL_PROXY}）" curl -fsSI -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null; then
     :
 else
     warn "经 ${LOCAL_PROXY} 探访 gemini.google.com 超时（若尚未选中可用节点属正常）"
