@@ -3,9 +3,30 @@
 set -eu
 HERE=$(cd "$(dirname "$0")/../global-script" && pwd)
 SRC="$HERE/global_script.js"
+if [ -z "${VERGE_DATA:-}" ]; then
+    for d in "$HOME/Library/Application Support/"*clash-verge* "$HOME/Library/Application Support/"*verge*; do
+        if [ -d "$d" ] && [ -f "$d/verge.yaml" ]; then VERGE_DATA="$d"; break; fi
+    done
+fi
 VERGE_DATA="${VERGE_DATA:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 TARGET="$VERGE_DATA/profiles/Script.js"
-KERNEL="/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo"
+if [ -z "${VERGE_APP:-}" ]; then
+    for d in "/Applications/Clash Verge.app" "/Applications/Clash Verge Rev.app"; do
+        [ -d "$d" ] && { VERGE_APP="$d"; break; }
+    done
+fi
+VERGE_APP="${VERGE_APP:-/Applications/Clash Verge.app}"
+KERNEL="$VERGE_APP/Contents/MacOS/verge-mihomo"
+VERGE_RES="$VERGE_APP/Contents/Resources/resources"
+
+# 预置地理数据库，防止全新 Verge 目录缺 geosite.dat/geoip.dat 导致 verge-mihomo -t 阻塞下载超时
+if [ -d "$VERGE_RES" ] && [ -d "$VERGE_DATA" ]; then
+    for gfile in geosite.dat geoip.dat Country.mmdb ASN.mmdb; do
+        if [ ! -f "$VERGE_DATA/$gfile" ] && [ -f "$VERGE_RES/$gfile" ]; then
+            cp "$VERGE_RES/$gfile" "$VERGE_DATA/$gfile"
+        fi
+    done
+fi
 
 command -v node >/dev/null 2>&1 || { echo "未安装 Node.js，无法执行语法校验"; exit 1; }
 
@@ -45,8 +66,11 @@ fs.writeFileSync(process.env.DEPLOY_OUT, JSON.stringify(out, null, 2))
 NODE
 
 if [ -x "$KERNEL" ]; then
-    "$KERNEL" -t -d "$VERGE_DATA" -f "$TMP_CFG" >/dev/null \
-        || { echo "mihomo 内核校验失败，未部署"; exit 1; }
+    if ! CHECK_OUT=$("$KERNEL" -t -d "$VERGE_DATA" -f "$TMP_CFG" 2>&1); then
+        echo "mihomo 内核校验失败，未部署：" >&2
+        printf '%s\n' "$CHECK_OUT" | tail -n 20 >&2
+        exit 1
+    fi
 else
     echo "⚠ 未找到 ${KERNEL}，已跳过内核校验（仅完成 JS 语法与合成校验）"
 fi

@@ -23,13 +23,21 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT_DIR="$REPO_DIR/setup-scripts"
 CONFIG_DIR="$REPO_DIR/global-script"
-VERGE_APP="/Applications/Clash Verge.app"
+if [ -z "${VERGE_APP:-}" ]; then
+    for d in "/Applications/Clash Verge.app" "/Applications/Clash Verge Rev.app"; do
+        [ -d "$d" ] && { VERGE_APP="$d"; break; }
+    done
+fi
+VERGE_APP="${VERGE_APP:-/Applications/Clash Verge.app}"
+VERGE_APP_NAME="$(basename "$VERGE_APP" .app)"
+export VERGE_APP
 if [ -z "${VERGE_DATA:-}" ]; then
     for d in "$HOME/Library/Application Support/"*clash-verge* "$HOME/Library/Application Support/"*verge*; do
         if [ -d "$d" ] && [ -f "$d/verge.yaml" ]; then VERGE_DATA="$d"; break; fi
     done
 fi
 VERGE_DATA="${VERGE_DATA:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
+export VERGE_DATA
 USER_LOCAL_PROXY="${LOCAL_PROXY:-}"
 
 progress_bar() {
@@ -185,7 +193,7 @@ ok "Node.js 就绪"
 
 if ! pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
     warn "Clash Verge 未在运行，正在启动…"
-    open -a "Clash Verge"
+    open -a "$VERGE_APP"
     for i in $(seq 1 8); do
         progress_inline "$i" 8 "等待 Clash Verge 启动 (${i}s/8s)"
         pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 && break
@@ -208,7 +216,9 @@ fi
 
 step 2 5 "宿主机：更新 my-proxy-configs 仓库"
 cd "$REPO_DIR"
-if run_with_spinner "通过代理拉取 my-proxy-configs" git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main; then
+if [ "${SKIP_GIT_PULL:-0}" = "1" ]; then
+    ok "跳过重复拉取（已由上级脚本同步）: ${REPO_DIR}"
+elif run_with_spinner "通过代理拉取 my-proxy-configs" git -c http.proxy="$LOCAL_PROXY" pull --ff-only origin main; then
     :
 elif run_with_spinner "直连拉取 my-proxy-configs" git pull --ff-only origin main; then
     :
@@ -262,18 +272,22 @@ fi
 
 if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
     BEFORE_MTIME=$(stat -f %m "$VERGE_DATA/clash-verge.yaml" 2>/dev/null || echo 0)
-    osascript -e 'quit app "Clash Verge"' >/dev/null 2>&1 || true
+    osascript -e "quit app \"${VERGE_APP_NAME}\"" >/dev/null 2>&1 || true
     for i in $(seq 1 8); do
         progress_inline "$i" 28 "正在退出旧 Clash Verge (${i}s)"
         pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || break
         sleep 1
     done
-    open -a "Clash Verge"
+    # 给 verge-mihomo 子进程 1s 释放端口与 IPC socket，避免重启瞬间撞锁
+    sleep 1
+    open -a "$VERGE_APP"
+    RELOAD_OK=0
     for i in $(seq 1 20); do
         progress_inline "$((8 + i))" 28 "等待 Clash Verge 重载配置 (${i}s/20s)"
         if pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
             eval "$(read_verge_meta)"
             if verge_api GET /configs >/dev/null; then
+                RELOAD_OK=1
                 if [ "$VERGE_BUILTIN_ENHANCED" = "false" ] || [ -z "${VERGE_CURRENT_PROFILE:-}" ]; then
                     break
                 fi
@@ -290,7 +304,11 @@ if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
         sleep 1
     done
     [ -t 1 ] && printf '\r\033[K'
-    ok "Clash Verge 已重启加载配置"
+    if [ "$RELOAD_OK" = "1" ]; then
+        ok "Clash Verge 已重启加载配置"
+    else
+        warn "Clash Verge 重启后 20s 内未检测到控制器就绪，请检查 Verge 界面状态"
+    fi
 elif [ "$NEED_RESTART" = "0" ]; then
     ok "Script.js 未变更且当前规则已就位，无需重启 Clash Verge"
 else
