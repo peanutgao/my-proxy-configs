@@ -40,32 +40,153 @@ VERGE_DATA="${VERGE_DATA:-$HOME/Library/Application Support/io.github.clash-verg
 export VERGE_DATA
 USER_LOCAL_PROXY="${LOCAL_PROXY:-}"
 
-progress_bar() {
-    local cur="$1" tot="$2" label="$3" width="${4:-20}"
-    local pct=$(( cur * 100 / tot ))
-    local filled=$(( cur * width / tot ))
-    local empty=$(( width - filled ))
-    local bar="" i=0
-    while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i + 1)); done
-    i=0
-    while [ "$i" -lt "$empty" ]; do bar="${bar}░"; i=$((i + 1)); done
-    printf '\n\033[1;34m[%s] %3d%% (%s/%s) %s\033[0m\n' "$bar" "$pct" "$cur" "$tot" "$label"
+# --- 统一进度条、旋转指示器与状态输出（兼容独立运行与 bootstrap.sh 嵌套区间映射）---
+if [ -n "${FORCE_COLOR:-}" ] && [ "${FORCE_COLOR}" != "0" ]; then
+    _UI_COLOR=1
+elif [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
+    _UI_COLOR=1
+else
+    _UI_COLOR=0
+fi
+
+if [ "$_UI_COLOR" = "1" ]; then
+    _UI_BOLD_BLUE='\033[1;34m'
+    _UI_CYAN='\033[0;36m'
+    _UI_BOLD_GREEN='\033[1;32m'
+    _UI_BOLD_YELLOW='\033[1;33m'
+    _UI_BOLD_RED='\033[1;31m'
+    _UI_RESET='\033[0m'
+else
+    _UI_BOLD_BLUE=''
+    _UI_CYAN=''
+    _UI_BOLD_GREEN=''
+    _UI_BOLD_YELLOW=''
+    _UI_BOLD_RED=''
+    _UI_RESET=''
+fi
+
+_UI_BAR_WIDTH=24
+
+ui_term_cols() {
+    local c=""
+    if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+        c=$(tput cols 2>/dev/null || true)
+    fi
+    case "$c" in
+        ''|*[!0-9]*) c=80 ;;
+    esac
+    [ "$c" -lt 40 ] && c=40
+    printf '%s' "$c"
 }
 
-progress_inline() {
-    local cur="$1" tot="$2" label="$3" width="${4:-20}"
-    local pct=$(( cur * 100 / tot ))
-    local filled=$(( cur * width / tot ))
-    local empty=$(( width - filled ))
+ui_fit_text() {
+    local max_cols="$1" text="$2"
+    [ "$max_cols" -lt 8 ] && max_cols=8
+    if [ $(( ${#text} * 2 )) -le "$max_cols" ]; then
+        printf '%s' "$text"
+        return 0
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$max_cols" "$text" <<'PY' 2>/dev/null && return 0
+import sys, unicodedata
+limit = int(sys.argv[1])
+text = sys.argv[2]
+def cw(ch):
+    if unicodedata.combining(ch):
+        return 0
+    return 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
+total = sum(cw(c) for c in text)
+if total <= limit:
+    sys.stdout.write(text)
+else:
+    out, w = [], 0
+    for c in text:
+        dw = cw(c)
+        if w + dw > limit - 1:
+            break
+        out.append(c)
+        w += dw
+    sys.stdout.write(''.join(out) + '…')
+PY
+    fi
+    local half=$(( max_cols / 2 ))
+    if [ "${#text}" -gt "$half" ]; then
+        printf '%s…' "${text:0:$((half - 1))}"
+    else
+        printf '%s' "$text"
+    fi
+}
+
+ui_render_bar() {
+    local pct="$1" width="${2:-$_UI_BAR_WIDTH}"
+    [ "$pct" -lt 0 ] && pct=0
+    [ "$pct" -gt 100 ] && pct=100
+    local filled=$(( (pct * width + 50) / 100 ))
+    [ "$filled" -gt "$width" ] && filled="$width"
+    [ "$pct" -gt 0 ] && [ "$filled" -eq 0 ] && filled=1
+    [ "$pct" -lt 100 ] && [ "$filled" -eq "$width" ] && filled=$((width - 1))
+    local empty=$((width - filled))
     local bar="" i=0
     while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i + 1)); done
     i=0
     while [ "$i" -lt "$empty" ]; do bar="${bar}░"; i=$((i + 1)); done
-    if [ -t 1 ]; then
-        printf '\r\033[K\033[0;36m  [%s] %3d%% %s\033[0m' "$bar" "$pct" "$label"
+    printf '[%s]' "$bar"
+}
+
+progress_bar() {
+    local pct="$1" tag="$2" label="$3" style="${4:-step}"
+    local bar
+    bar=$(ui_render_bar "$pct" "$_UI_BAR_WIDTH")
+    case "$style" in
+        done)
+            printf '\n'"${_UI_BOLD_GREEN}"'%s %3d%% │ %s'"${_UI_RESET}"'\n' "$bar" "$pct" "$label"
+            ;;
+        sub)
+            printf '\n  '"${_UI_CYAN}"'%s %3d%% │ %s %s'"${_UI_RESET}"'\n' "$bar" "$pct" "$tag" "$label"
+            ;;
+        *)
+            printf '\n'"${_UI_BOLD_BLUE}"'%s %3d%% │ %s %s'"${_UI_RESET}"'\n' "$bar" "$pct" "$tag" "$label"
+            ;;
+    esac
+}
+
+step() {
+    local cur="$1" tot="$2" label="$3"
+    [ "$tot" -le 0 ] && tot=1
+    if [ "${MDD_NESTED:-0}" = "1" ]; then
+        local p_start="${MDD_PROGRESS_START:-0}"
+        local p_end="${MDD_PROGRESS_END:-100}"
+        local pct=$(( p_start + (cur - 1) * (p_end - p_start) / tot ))
+        local tag="${MDD_PHASE_PREFIX:+${MDD_PHASE_PREFIX}.}${cur}/${tot}"
+        progress_bar "$pct" "$tag" "$label" "sub"
     else
-        printf '  [%s] %3d%% %s\n' "$bar" "$pct" "$label"
+        local pct=$(( (cur - 1) * 100 / tot ))
+        progress_bar "$pct" "${cur}/${tot}" "$label" "step"
     fi
+}
+
+progress_done() {
+    [ "${MDD_NESTED:-0}" = "1" ] && return 0
+    progress_bar 100 "" "$1" "done"
+}
+
+wait_tick() {
+    local tick="$1" label="$2"
+    local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local idx=$(( tick % 10 ))
+    if [ -t 1 ]; then
+        local cols avail fit
+        cols=$(ui_term_cols)
+        avail=$(( cols - 6 ))
+        fit=$(ui_fit_text "$avail" "$label")
+        printf '\r\033[K'"${_UI_CYAN}"'  %s %s'"${_UI_RESET}" "${frames[$idx]}" "$fit"
+    elif [ "$tick" -eq 1 ]; then
+        printf '  → %s…\n' "$label"
+    fi
+}
+
+clear_inline() {
+    [ -t 1 ] && printf '\r\033[K'
 }
 
 run_with_spinner() {
@@ -74,40 +195,53 @@ run_with_spinner() {
     log=$(mktemp "${TMPDIR:-/tmp}/verge-spin.XXXXXX")
     if [ ! -t 1 ]; then
         printf '  → %s…\n' "$label"
-        if "$@" >"$log" 2>&1; then
+        local rc=0
+        "$@" >"$log" 2>&1 || rc=$?
+        if [ "$rc" -eq 0 ]; then
+            printf '  ✓ %s\n' "$label"
             rm -f "$log"; return 0
         else
-            local rc=$?; cat "$log" >&2; rm -f "$log"; return "$rc"
+            printf '  ✗ %s 失败\n' "$label" >&2
+            cat "$log" >&2
+            rm -f "$log"; return "$rc"
         fi
     fi
+
+    local cols avail fit_label
+    cols=$(ui_term_cols)
+    avail=$(( cols - 12 ))
+    fit_label=$(ui_fit_text "$avail" "$label")
+
     "$@" >"$log" 2>&1 &
     local pid=$!
+    trap 'kill "$pid" 2>/dev/null || true; rm -f "$log"; printf "\r\033[K"; trap - INT TERM; kill -INT $$' INT TERM
+
     local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local idx=0 start_ts
     start_ts=$(date +%s)
     while kill -0 "$pid" 2>/dev/null; do
         local elapsed=$(( $(date +%s) - start_ts ))
-        printf '\r\033[K\033[0;36m  %s %s (%ds)\033[0m' "${frames[$idx]}" "$label" "$elapsed"
+        printf '\r\033[K'"${_UI_CYAN}"'  %s %s (%ds)'"${_UI_RESET}" "${frames[$idx]}" "$fit_label" "$elapsed"
         idx=$(( (idx + 1) % 10 ))
         sleep 0.15
     done
     local rc=0
     wait "$pid" || rc=$?
+    trap - INT TERM
     local elapsed=$(( $(date +%s) - start_ts ))
     if [ "$rc" -eq 0 ]; then
-        printf '\r\033[K\033[1;32m  ✓ %s (%ds)\033[0m\n' "$label" "$elapsed"
+        printf '\r\033[K'"${_UI_BOLD_GREEN}"'  ✓ %s (%ds)'"${_UI_RESET}"'\n' "$label" "$elapsed"
     else
-        printf '\r\033[K\033[1;31m  ✗ %s 失败 (%ds)\033[0m\n' "$label" "$elapsed" >&2
+        printf '\r\033[K'"${_UI_BOLD_RED}"'  ✗ %s 失败 (%ds)'"${_UI_RESET}"'\n' "$label" "$elapsed" >&2
         cat "$log" >&2
     fi
     rm -f "$log"
     return "$rc"
 }
 
-step() { progress_bar "$1" "$2" "$3"; }
-ok()   { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }
-warn() { printf '\033[1;33m  ⚠ %s\033[0m\n' "$*"; }
-die()  { printf '\033[1;31m  ✗ %s\033[0m\n' "$*" >&2; exit 1; }
+ok()   { printf "${_UI_BOLD_GREEN}"'  ✓ %s'"${_UI_RESET}"'\n' "$*"; }
+warn() { printf "${_UI_BOLD_YELLOW}"'  ⚠ %s'"${_UI_RESET}"'\n' "$*"; }
+die()  { printf "${_UI_BOLD_RED}"'  ✗ %s'"${_UI_RESET}"'\n' "$*" >&2; exit 1; }
 
 read_verge_meta() {
     VERGE_DATA="$VERGE_DATA" python3 - <<'PY'
@@ -195,11 +329,11 @@ if ! pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
     warn "Clash Verge 未在运行，正在启动…"
     open -a "$VERGE_APP"
     for i in $(seq 1 8); do
-        progress_inline "$i" 8 "等待 Clash Verge 启动 (${i}s/8s)"
+        wait_tick "$i" "等待 Clash Verge 启动 (${i}s/8s)"
         pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 && break
         sleep 1
     done
-    [ -t 1 ] && printf '\r\033[K'
+    clear_inline
     pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || die "Clash Verge 启动失败，请手动打开后重试。"
 fi
 ok "Clash Verge 运行中"
@@ -274,7 +408,7 @@ if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
     BEFORE_MTIME=$(stat -f %m "$VERGE_DATA/clash-verge.yaml" 2>/dev/null || echo 0)
     osascript -e "quit app \"${VERGE_APP_NAME}\"" >/dev/null 2>&1 || true
     for i in $(seq 1 8); do
-        progress_inline "$i" 28 "正在退出旧 Clash Verge (${i}s)"
+        wait_tick "$i" "正在退出旧 Clash Verge (${i}s/8s)"
         pgrep -f "MacOS/clash-verge" >/dev/null 2>&1 || break
         sleep 1
     done
@@ -283,7 +417,7 @@ if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
     open -a "$VERGE_APP"
     RELOAD_OK=0
     for i in $(seq 1 20); do
-        progress_inline "$((8 + i))" 28 "等待 Clash Verge 重载配置 (${i}s/20s)"
+        wait_tick "$i" "等待 Clash Verge 重载配置 (${i}s/20s)"
         if pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
             eval "$(read_verge_meta)"
             if verge_api GET /configs >/dev/null; then
@@ -303,7 +437,7 @@ if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
         fi
         sleep 1
     done
-    [ -t 1 ] && printf '\r\033[K'
+    clear_inline
     if [ "$RELOAD_OK" = "1" ]; then
         ok "Clash Verge 已重启加载配置"
     else
@@ -378,6 +512,8 @@ if run_with_spinner "探访 gemini.google.com（经 ${LOCAL_PROXY}）" curl -fsS
 else
     warn "经 ${LOCAL_PROXY} 探访 gemini.google.com 超时（若尚未选中可用节点属正常）"
 fi
+
+progress_done "宿主机 Clash Verge 全局脚本部署完成"
 
 echo ""
 echo "手机端共用规则源（无需部署）："
