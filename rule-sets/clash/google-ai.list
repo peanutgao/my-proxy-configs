@@ -35,4 +35,7 @@ DOMAIN,daily-cloudcode-pa.googleapis.com
 DOMAIN,daily-cloudcode-pa.sandbox.googleapis.com
 DOMAIN,autopush-cloudcode-pa.sandbox.googleapis.com
 DOMAIN,cloudaicompanion.googleapis.com
+# 2026-11-23: Gemini API 反代（Cloudflare Worker，绕开出口 IP 地区判定）。
+# 应用侧 base URL 用 https://gemini-proxy.joseph0750.workers.dev/v1beta
+DOMAIN-SUFFIX,joseph0750.workers.dev
 GEOSITE,google-gemini

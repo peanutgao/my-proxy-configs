@@ -2,3 +2,4 @@
 .workbuddy-ai/
 .DS_Store
 *.bak-*
+cloudflare-worker/.wrangler/

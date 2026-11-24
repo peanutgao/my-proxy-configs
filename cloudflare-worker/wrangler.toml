@@ -1,0 +1,6 @@
+name = "gemini-proxy"
+main = "gemini-proxy.js"
+compatibility_date = "2024-11-01"
+
+# 部署后 Worker 域名 = https://gemini-proxy.<你的子域>.workers.dev
+# 无需任何环境变量或密钥；纯透明反代。

@@ -1663,6 +1663,17 @@ const defaultArgs = {
   ipv6: false,
   logLevel: 'error',
   githubProxy: '',
+  // fork: 谷歌AI 专用真美国出口（MyDedione ss8885）。机场订阅的「美国」节点
+  // 落地实为 JP/SG/HK（Google 判非美国 → FAILED_PRECONDITION），需要宿主机本地
+  // Merge 注入 dedione 节点本体（密码只存本地，不入公开仓库）。
+  // Verge 全局扩展脚本调用 main(config) 时不传 $arguments，凭据不能走本表的
+  // 参数入口；改为运行时从本地 Merge 识别：节点名常量见 _DEDIONE_EXIT_NAME，
+  // main() 里检测 Merge 注入的同名节点并挂到「谷歌AI」组首位。
+  dedioneExit: 'dedione-美国出口',
+  dedioneServer: '',
+  dedionePort: 8885,
+  dedioneCipher: '2022-blake3-aes-128-gcm',
+  dedionePassword: '',
 }
 
 let args = typeof $arguments !== 'undefined' ? $arguments : defaultArgs
@@ -1712,6 +1723,11 @@ let {
   ipv6 = args.ipv6 || false,
   logLevel = args.logLevel || 'error',
   githubProxy = args.githubProxy || '',
+  dedioneExit = args.dedioneExit || '',
+  dedioneServer = args.dedioneServer || '',
+  dedionePort = args.dedionePort || 8885,
+  dedioneCipher = args.dedioneCipher || '2022-blake3-aes-128-gcm',
+  dedionePassword = args.dedionePassword || '',
 } = args
 
 /**
@@ -2219,6 +2235,14 @@ const serviceConfigs = [
 // --- 3. 主入口 ---
 
 function main(config) {
+  // fork: MyDedione profile 自带完整分组/规则（build-mydedione.rb 生成，直连dedione
+  // 优先），YaNet 不接管——否则 dedione← 选择组会被本脚本重建的组全部替换。
+  if (
+    (config['proxy-groups'] || []).some((g) => g && typeof g.name === 'string' && g.name.startsWith('dedione←')) &&
+    (config['proxy-groups'] || []).some((g) => g && g.name === '直连dedione')
+  ) {
+    return config
+  }
   if (!enable) return config
 
   rules.length = 0
@@ -2343,6 +2367,42 @@ function main(config) {
   const reservedNames = new Set(['直连', '拒绝'])
   config.proxies = config.proxies.filter((p) => p && !reservedNames.has(p.name))
   const userProxies = [...config.proxies]
+
+  // fork: 谷歌AI 专用真美国出口。Verge 不向全局扩展脚本传 $arguments，
+  // 凭据与节点本体都来自本地 Merge（profiles/*.yaml，仅存本机）：在这里
+  // 检测 Merge 注入的同名节点，存在则启用并把该名排进「谷歌AI」组首位。
+  // 未注入时 dedioneEnabled=false，组行为回退为美国组优先。
+  let dedioneEnabled = false
+  if (dedioneExit) {
+    const existing = config.proxies.find((p) => p && p.name === dedioneExit)
+    if (existing) {
+      dedioneEnabled = true
+      // 防误配：出口必须是 ss 且指向 dedioneServer（若用户同时注入了 server/password
+      // 参数则以其为准覆盖 merge 值，保持参数注入通道可用）
+      if (dedioneServer && dedionePassword) {
+        Object.assign(existing, {
+          type: 'ss',
+          server: dedioneServer,
+          port: Number(dedionePort) || 8885,
+          cipher: dedioneCipher,
+          password: dedionePassword,
+          udp: true,
+        })
+      }
+    } else if (dedioneServer && dedionePassword) {
+      // 参数通道齐全时也可以直接建节点（无 Merge 时的备用注入路径）
+      dedioneEnabled = true
+      config.proxies.push({
+        name: dedioneExit,
+        type: 'ss',
+        server: dedioneServer,
+        port: Number(dedionePort) || 8885,
+        cipher: dedioneCipher,
+        password: dedionePassword,
+        udp: true,
+      })
+    }
+  }
 
   config.proxies.push({
     name: '直连',
@@ -2502,13 +2562,18 @@ function main(config) {
       } else if (svc.key === 'biliintl' || svc.key === 'bahamut') {
         groupProxies = ['手动选择', '直连', ...regionGroupNames]
       } else if (svc.key === 'googleai') {
-        // fork: 谷歌AI对非美出口限制最多（Gemini/Antigravity 地区封锁清单以美国最全），
-        // 组成员美国排最前，select 组默认取第一项，重新合成后自动落美国节点。
+        // fork: 谷歌AI对非美出口限制最多（Gemini/Antigravity 地区封锁清单以美国最全）。
+        // 订阅「美国」节点落地可能实际为 JP/SG/HK（2026-11-23 实测：一元 4 条美国专线
+        // 全部解析到香港 157.254.23.66；夜煞美国落地东京/吉隆坡/香港），Google 按
+        // 落地 IP 判地区 → FAILED_PRECONDITION。因此 dedione 真美国出口（Akari LAX）
+        // 排最前，select 组默认取第一项；未配置凭据时回退旧行为（美国组优先）。
         const usFirst = [...regionGroupNames].sort((a, b) => {
           const rank = (n) => (/US/i.test(n) ? 0 : 1)
           return rank(a) - rank(b)
         })
-        groupProxies = [...usFirst, '手动选择', '直连']
+        groupProxies = dedioneEnabled
+          ? [dedioneExit, ...usFirst, '手动选择', '直连']
+          : [...usFirst, '手动选择', '直连']
       } else {
         groupProxies = ['手动选择', ...regionGroupNames, '直连']
       }
