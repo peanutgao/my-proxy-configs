@@ -24,7 +24,12 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT_DIR="$REPO_DIR/setup-scripts"
 CONFIG_DIR="$REPO_DIR/global-script"
 VERGE_APP="/Applications/Clash Verge.app"
-VERGE_DATA="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+if [ -z "${VERGE_DATA:-}" ]; then
+    for d in "$HOME/Library/Application Support/"*clash-verge* "$HOME/Library/Application Support/"*verge*; do
+        if [ -d "$d" ] && [ -f "$d/verge.yaml" ]; then VERGE_DATA="$d"; break; fi
+    done
+fi
+VERGE_DATA="${VERGE_DATA:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 USER_LOCAL_PROXY="${LOCAL_PROXY:-}"
 
 progress_bar() {
@@ -244,6 +249,9 @@ diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/nu
 
 step 5 5 "宿主机：自动重载与验收"
 NEED_RESTART="$SCRIPT_CHANGED"
+if [ "${FORCE_RESTART_VERGE:-0}" = "1" ]; then
+    NEED_RESTART=1
+fi
 if [ "$NEED_RESTART" = "0" ] && verge_api GET /configs >/dev/null; then
     FIRST_LIVE=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print((r[0].get("payload","") + "," + r[0].get("proxy","")) if r else "")' 2>/dev/null || true)
     GAI_LIVE=$(verge_api GET /providers/rules | python3 -c 'import json,sys; p=(json.load(sys.stdin).get("providers") or {}).get("google-ai"); print("1" if p is not None else "")' 2>/dev/null || true)
