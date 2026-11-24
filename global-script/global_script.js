@@ -2153,7 +2153,7 @@ const serviceConfigs = [
   {
     key: 'whatsapp',
     name: 'WhatsApp',
-    icon: 'https://static.whatsapp.net/rsrc.php/v3/yP/r/rYZqPCBaG70.png',
+    icon: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg', // 2026-11-24: 原官方CDN已404
     url: 'https://web.whatsapp.com/data/manifest.json',
     rules: ['GEOSITE,whatsapp,WhatsApp'],
   },
@@ -2235,11 +2235,12 @@ const serviceConfigs = [
 // --- 3. 主入口 ---
 
 function main(config) {
-  // fork: MyDedione profile 自带完整分组/规则（build-mydedione.rb 生成，直连dedione
+  // fork: MyDedione profile 自带完整分组/规则（build-mydedione.rb 生成，dedione直连
   // 优先），YaNet 不接管——否则 dedione← 选择组会被本脚本重建的组全部替换。
+  // 2026-11-24: 「直连dedione」已改名「dedione直连」，两个名字只要命中任一即旁路，兼容旧名。
   if (
     (config['proxy-groups'] || []).some((g) => g && typeof g.name === 'string' && g.name.startsWith('dedione←')) &&
-    (config['proxy-groups'] || []).some((g) => g && g.name === '直连dedione')
+    (config['proxy-groups'] || []).some((g) => g && (g.name === 'dedione直连' || g.name === '直连dedione'))
   ) {
     return config
   }
