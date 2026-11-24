@@ -115,7 +115,8 @@ def scalar(path, key):
     return ''
 
 mixed_port = (
-    scalar(vd / 'clash-verge.yaml', 'mixed-port')
+    scalar(vd / 'verge.yaml', 'verge_mixed_port')
+    or scalar(vd / 'clash-verge.yaml', 'mixed-port')
     or scalar(vd / 'config.yaml', 'mixed-port')
     or '6152'
 )
@@ -127,6 +128,9 @@ elif ctrl.startswith('0.0.0.0:'):
 secret = scalar(vd / 'config.yaml', 'secret') or scalar(vd / 'clash-verge.yaml', 'secret')
 unix_sock = scalar(vd / 'clash-verge.yaml', 'external-controller-unix')
 builtin_enh = scalar(vd / 'verge.yaml', 'enable_builtin_enhanced')
+cur_profile = scalar(vd / 'profiles.yaml', 'current')
+if cur_profile.lower() in ('null', '~'):
+    cur_profile = ''
 
 for k, v in (
     ('VERGE_MIXED_PORT', mixed_port),
@@ -134,6 +138,7 @@ for k, v in (
     ('VERGE_CTRL_SECRET', secret),
     ('VERGE_UNIX_SOCK', unix_sock),
     ('VERGE_BUILTIN_ENHANCED', builtin_enh),
+    ('VERGE_CURRENT_PROFILE', cur_profile),
 ):
     print(f'{k}={shlex.quote(v)}')
 PY
@@ -192,6 +197,9 @@ ok "已识别 Verge 代理端口: ${VERGE_MIXED_PORT}（LOCAL_PROXY=${LOCAL_PROX
 if [ "$VERGE_BUILTIN_ENHANCED" = "false" ]; then
     warn "检测到 verge.yaml 中 enable_builtin_enhanced=false，请在 Verge 设置中开启「全局扩展脚本」否则 Script.js 不会生效"
 fi
+if [ -z "${VERGE_CURRENT_PROFILE:-}" ]; then
+    warn "检测到 profiles.yaml 中未选中订阅（current 为空），请在 Clash Verge 中先选择一个订阅"
+fi
 
 step 2 5 "宿主机：更新 my-proxy-configs 仓库"
 cd "$REPO_DIR"
@@ -236,14 +244,16 @@ diff -q "$CONFIG_DIR/global_script.js" "$VERGE_DATA/profiles/Script.js" >/dev/nu
 
 step 5 5 "宿主机：自动重载与验收"
 NEED_RESTART="$SCRIPT_CHANGED"
-if [ "$NEED_RESTART" = "0" ]; then
+if [ "$NEED_RESTART" = "0" ] && verge_api GET /configs >/dev/null; then
     FIRST_LIVE=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print((r[0].get("payload","") + "," + r[0].get("proxy","")) if r else "")' 2>/dev/null || true)
-    if [ -n "$FIRST_LIVE" ] && [[ "$FIRST_LIVE" != *"OrbStack Helper"* ]]; then
+    GAI_LIVE=$(verge_api GET /providers/rules | python3 -c 'import json,sys; p=(json.load(sys.stdin).get("providers") or {}).get("google-ai"); print("1" if p is not None else "")' 2>/dev/null || true)
+    if [[ "$FIRST_LIVE" != *"OrbStack Helper"* ]] || [ -z "$GAI_LIVE" ]; then
         NEED_RESTART=1
     fi
 fi
 
 if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
+    BEFORE_MTIME=$(stat -f %m "$VERGE_DATA/clash-verge.yaml" 2>/dev/null || echo 0)
     osascript -e 'quit app "Clash Verge"' >/dev/null 2>&1 || true
     for i in $(seq 1 8); do
         progress_inline "$i" 28 "正在退出旧 Clash Verge (${i}s)"
@@ -255,7 +265,19 @@ if [ "$NEED_RESTART" = "1" ] && [ "${NO_RESTART_VERGE:-0}" != "1" ]; then
         progress_inline "$((8 + i))" 28 "等待 Clash Verge 重载配置 (${i}s/20s)"
         if pgrep -f "MacOS/clash-verge" >/dev/null 2>&1; then
             eval "$(read_verge_meta)"
-            verge_api GET /configs >/dev/null && break
+            if verge_api GET /configs >/dev/null; then
+                if [ "$VERGE_BUILTIN_ENHANCED" = "false" ] || [ -z "${VERGE_CURRENT_PROFILE:-}" ]; then
+                    break
+                fi
+                AFTER_MTIME=$(stat -f %m "$VERGE_DATA/clash-verge.yaml" 2>/dev/null || echo 0)
+                if [ "$AFTER_MTIME" != "$BEFORE_MTIME" ] || [ "$i" -ge 3 ]; then
+                    LIVE_R0=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print(r[0].get("payload","") if r else "")' 2>/dev/null || true)
+                    LIVE_GAI=$(verge_api GET /providers/rules | python3 -c 'import json,sys; p=(json.load(sys.stdin).get("providers") or {}).get("google-ai"); print("1" if p is not None else "")' 2>/dev/null || true)
+                    if [[ "$LIVE_R0" == *"OrbStack Helper"* ]] && [ -n "$LIVE_GAI" ]; then
+                        break
+                    fi
+                fi
+            fi
         fi
         sleep 1
     done
@@ -271,6 +293,17 @@ eval "$(read_verge_meta)"
 LOCAL_PROXY="${USER_LOCAL_PROXY:-http://127.0.0.1:${VERGE_MIXED_PORT}}"
 
 if CFG_JSON=$(verge_api GET /configs); then
+    if [ -z "$USER_LOCAL_PROXY" ]; then
+        # 只认 mixed-port：/configs 里的 port 是 Verge 的 HTTP 代理端口（verge_port，
+        # 常见 7891），语义不同，用它覆盖会把混合端口误判成 7891（而 OrbStack 也占
+        # 宿主机 7890，容易混淆）。取不到就保留从 verge.yaml 读到的 verge_mixed_port。
+        LIVE_PORT=$(printf '%s' "$CFG_JSON" | python3 -c 'import json,sys; p=(json.load(sys.stdin).get("mixed-port") or 0); print(p if int(p) > 0 else "")' 2>/dev/null || true)
+        if [ -n "$LIVE_PORT" ]; then
+            VERGE_MIXED_PORT="$LIVE_PORT"
+            LOCAL_PROXY="http://127.0.0.1:${VERGE_MIXED_PORT}"
+        fi
+    fi
+
     CUR_MODE=$(printf '%s' "$CFG_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("mode",""))' 2>/dev/null || true)
     if [ "$CUR_MODE" != "rule" ]; then
         warn "当前 Verge 模式为 '${CUR_MODE}'，正在自动切换为规则模式 (rule)…"
@@ -283,8 +316,8 @@ if CFG_JSON=$(verge_api GET /configs); then
         ok "Verge 运行模式: rule（规则模式）"
     fi
 
-    RULE0=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print(f"{r[0].get(\"type\")},{r[0].get(\"payload\")},{r[0].get(\"proxy\")}" if r else "")' 2>/dev/null || true)
-    if [[ "$RULE0" == *"OrbStack Helper"* && "$RULE0" == *",直连" ]]; then
+    RULE0=$(verge_api GET /rules | python3 -c 'import json,sys; r=json.load(sys.stdin).get("rules") or []; print(",".join(str(r[0].get(k,"")) for k in ("type","payload","proxy")) if r else "")' 2>/dev/null || true)
+    if [[ "$RULE0" == *"OrbStack Helper"* && ( "$RULE0" == *",直连" || "$RULE0" == *",DIRECT" ) ]]; then
         ok "首条规则已生效: ${RULE0}"
     else
         warn "首条规则未命中 OrbStack 直连（实际: ${RULE0:-空}），请确认 Verge 已选中订阅且启用全局扩展脚本"
@@ -303,7 +336,7 @@ import os, pathlib, re
 text = (pathlib.Path(os.environ['VERGE_DATA']) / 'clash-verge.yaml').read_text(encoding='utf-8', errors='replace')
 m_mode = re.search(r'^mode:\s*(\S+)', text, re.M)
 mode = m_mode.group(1) if m_mode else 'unknown'
-has_orb = 'OrbStack Helper,直连' in text
+has_orb = 'OrbStack Helper,直连' in text or 'OrbStack Helper,DIRECT' in text
 has_gai = 'google-ai:' in text
 print(f'  {"✓" if mode == "rule" else "⚠"} clash-verge.yaml mode={mode}')
 print(f'  {"✓" if has_orb else "⚠"} clash-verge.yaml 含 OrbStack Helper 直连规则={has_orb}')
