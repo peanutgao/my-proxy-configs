@@ -15,10 +15,10 @@
 1. **组名与电脑端 Clash 对齐**：`国外AI`/`谷歌服务`/`App Store`/`Github`/`微软服务`/`Telegram`/`YouTube`/`NETFLIX`/`Disney+`/`HBO`/`游戏专用`/`苹果服务`/`其他外网` 等——手机和电脑用同一套命名，切换设备不用重新找组（电脑端的 `谷歌AI` 无规则引用，手机端未保留）
 2. **新增 `Dedione` 固定出口组**——成员是手填的落地节点 `Dedione出口`
 3. **AI 拆成三组**（比电脑端更细）：
-   - `GPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
-   - `Google`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
+   - `ChatGPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
+   - `GoogleAI`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
    - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione`
-   - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（共 35 条）
+   - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（共 35 条；文件名保留旧名，组名分别为 ChatGPT/GoogleAI/Claude）
    - 第三方 `global.list`（Adobe/AWS 等）→ `国外AI`
 4. **移除孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是原来"设了 AI 服务还是不可用"的根因
 5. **修复 404 规则**：旧 `peanutgao/rule-sets` 已并入本仓库，相关 RULE-SET URL 换成新前缀
@@ -69,7 +69,7 @@ https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/mobile/shadowr
 
 ### 第五步：验证
 打开浏览器访问 `https://api.ipify.org`，确认出口 IP = 你的自建落地 IP。
-再分别访问 `claude.ai`（应走 `Claude` 组）、`gemini.google.com`（`Google` 组）、`chatgpt.com`（`GPT` 组），在 SR 首页看流量落在哪个组。
+再分别访问 `claude.ai`（应走 `Claude` 组）、`gemini.google.com`（`GoogleAI` 组）、`chatgpt.com`（`ChatGPT` 组），在 SR 首页看流量落在哪个组。
 
 ## 维护方式
 
