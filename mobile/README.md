@@ -20,6 +20,7 @@
    - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione` 固定出口
    - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（共 35 条；文件名保留旧名，组名分别为 ChatGPT/GoogleAI/Claude）
    - 第三方 `global.list`（Adobe/AWS 等）→ `国外AI`
+   - **默认策略总览**：三个 AI 组如上；其余 19 个国外用途组（国外AI/谷歌服务/App Store/Github/微软服务/Telegram/YouTube/NETFLIX/游戏外的流媒体等）默认 `PROXY`（走机场普通节点，不占固定出口）；国内类组默认 `DIRECT`；`广告过滤` 默认 `REJECT`
 4. **移除孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是原来"设了 AI 服务还是不可用"的根因
 5. **修复 404 规则**：旧 `peanutgao/rule-sets` 已并入本仓库，相关 RULE-SET URL 换成新前缀
 6. **脱敏**：删除 `[MITM]` 段的 `ca-p12`/`ca-passphrase`；私钥转存私有库 `mydedione-secrets/mobile/mitm-credentials.txt`
