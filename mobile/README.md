@@ -12,9 +12,9 @@
 
 基于 `lazy_group_my.conf` 改造，**General / DNS / 网络 / Host / URL Rewrite / MITM 开关全部保留**，只重建了 `[Proxy Group]` 和 `[Rule]`：
 
-1. **组名与电脑端 Clash 对齐**：`谷歌AI`/`国外AI`/`谷歌服务`/`App Store`/`Github`/`微软服务`/`Telegram`/`YouTube`/`NETFLIX`/`Disney+`/`HBO`/`游戏专用`/`苹果服务`/`其他外网` 等——手机和电脑用同一套命名，切换设备不用重新找组
+1. **组名与电脑端 Clash 对齐**：`国外AI`/`谷歌服务`/`App Store`/`Github`/`微软服务`/`Telegram`/`YouTube`/`NETFLIX`/`Disney+`/`HBO`/`游戏专用`/`苹果服务`/`其他外网` 等——手机和电脑用同一套命名，切换设备不用重新找组（电脑端的 `谷歌AI` 无规则引用，手机端未保留）
 2. **新增 `Dedione` 固定出口组**——成员是手填的落地节点 `Dedione出口`
-3. **AI 拆成三组**（比电脑端的 谷歌AI/国外AI 更细）：
+3. **AI 拆成三组**（比电脑端更细）：
    - `GPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
    - `Google`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
    - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione`
