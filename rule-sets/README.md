@@ -22,8 +22,11 @@ raw URL 前缀：`https://raw.githubusercontent.com/peanutgao/my-proxy-configs/m
 ```text
 .../clash/google-ai.list
 .../clash/Claude.yaml
-.../surge/AI.list
-.../shadowrocket/AI.list
+.../shadowrocket/AI-GPT.list
+.../shadowrocket/AI-Google.list
+.../shadowrocket/AI-Claude.list
 ```
+
+AI 规则已按用途拆为 `shadowrocket/AI-{GPT,Google,Claude}.list`（原聚合 `AI.list` 已删除）。
 
 原 `peanutgao/rule-sets` 仓库内容已并入本目录；若仍有配置引用 `raw.githubusercontent.com/peanutgao/rule-sets/main/...`，须换成上面的前缀。

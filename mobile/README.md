@@ -18,9 +18,9 @@
    - `GPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
    - `Google`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
    - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione`
-   - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（从 `AI.list` 拆分，35 条全覆盖）
+   - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（共 35 条）
    - 第三方 `global.list`（Adobe/AWS 等）→ `国外AI`
-4. **废弃孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是"设了 AI 服务还是不可用"的根因
+4. **移除孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是原来"设了 AI 服务还是不可用"的根因
 5. **修复 404 规则**：旧 `peanutgao/rule-sets` 已并入本仓库，相关 RULE-SET URL 换成新前缀
 6. **脱敏**：删除 `[MITM]` 段的 `ca-p12`/`ca-passphrase`；私钥转存私有库 `mydedione-secrets/mobile/mitm-credentials.txt`
 
@@ -73,7 +73,7 @@ https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/mobile/shadowr
 
 ## 维护方式
 
-- **AI 规则更新**：改 `../rule-sets/shadowrocket/AI.list`（主清单），再同步拆到 `AI-GPT.list`/`AI-Google.list`/`AI-Claude.list`（三组之和须等于主清单）；手机端下次拉规则自动生效
+- **AI 规则更新**：直接改 `../rule-sets/shadowrocket/AI-GPT.list`/`AI-Google.list`/`AI-Claude.list` 对应分组；手机端下次拉规则自动生效
 - **分组调整**：改 `shadowrocket/dedione.conf` 的 `[Proxy Group]` 段，组名与电脑端 MyDedione 保持一致
 - **改完推送**：`git push` 后手机重新导入 URL（或等客户端自动更新）
 

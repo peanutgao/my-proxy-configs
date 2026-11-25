@@ -19,8 +19,9 @@ raw URL 前缀：`https://raw.githubusercontent.com/peanutgao/my-proxy-configs/m
 ```text
 .../rule-sets/clash/google-ai.list
 .../rule-sets/clash/Claude.yaml
-.../rule-sets/surge/AI.list
-.../rule-sets/shadowrocket/AI.list
+.../rule-sets/shadowrocket/AI-GPT.list
+.../rule-sets/shadowrocket/AI-Google.list
+.../rule-sets/shadowrocket/AI-Claude.list
 .../mobile/shadowrocket/dedione.conf
 .../rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
 ```
