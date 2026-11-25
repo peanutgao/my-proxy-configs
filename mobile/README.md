@@ -15,9 +15,9 @@
 1. **组名与电脑端 Clash 对齐**：`国外AI`/`谷歌服务`/`App Store`/`Github`/`微软服务`/`Telegram`/`YouTube`/`NETFLIX`/`Disney+`/`HBO`/`游戏专用`/`苹果服务`/`其他外网` 等——手机和电脑用同一套命名，切换设备不用重新找组（电脑端的 `谷歌AI` 无规则引用，手机端未保留）
 2. **新增 `Dedione` 固定出口组**——成员是手填的落地节点 `Dedione出口`
 3. **AI 拆成三组**（比电脑端更细）：
-   - `ChatGPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
-   - `GoogleAI`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
-   - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione`
+   - `ChatGPT`（8 域名：ChatGPT/API/Sora）→ 默认 `日本节点`
+   - `GoogleAI`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `美国节点`
+   - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione` 固定出口
    - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（共 35 条；文件名保留旧名，组名分别为 ChatGPT/GoogleAI/Claude）
    - 第三方 `global.list`（Adobe/AWS 等）→ `国外AI`
 4. **移除孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是原来"设了 AI 服务还是不可用"的根因
@@ -68,8 +68,9 @@ https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/mobile/shadowr
 若不需要解密，跳过即可——分流规则基于域名，不依赖解密。
 
 ### 第五步：验证
-打开浏览器访问 `https://api.ipify.org`，确认出口 IP = 你的自建落地 IP。
-再分别访问 `claude.ai`（应走 `Claude` 组）、`gemini.google.com`（`GoogleAI` 组）、`chatgpt.com`（`ChatGPT` 组），在 SR 首页看流量落在哪个组。
+访问 `claude.ai`（走 `Claude` 组 → 默认 `Dedione` 固定出口），确认出口 IP = 你的自建落地 IP。
+再分别访问 `gemini.google.com`（`GoogleAI` 组 → 默认 `美国节点`）、`chatgpt.com`（`ChatGPT` 组 → 默认 `日本节点`），在 SR 首页确认流量落在对应节点组。
+> 三组默认策略可随时在 SR 的组页面手动切换；想让某个 AI 也走固定出口，选 `Dedione` 即可。
 
 ## 维护方式
 
