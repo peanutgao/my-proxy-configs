@@ -9,6 +9,7 @@
 | `global-script/` | Clash Verge 全局脚本配置（fork 自 YaNet）+ dedione 拦截规则 |
 | `setup-scripts/` | `deploy.sh` 部署配置到 Verge；`setup-verge-global.sh` 新机一键部署 |
 | `rule-sets/` | 按平台分类的规则，详见该目录 README |
+| `mobile/` | 手机端懒人配置（Shadowrocket）：Dedione 固定出口，节点靠订阅、规则靠远程、凭据不入库 |
 | `rewrite/quantumult/` | Quantumult X 的 YouTube 去广告 + DualSubs 双语字幕 rewrite 脚本 |
 
 ## 远程引用
@@ -20,6 +21,7 @@ raw URL 前缀：`https://raw.githubusercontent.com/peanutgao/my-proxy-configs/m
 .../rule-sets/clash/Claude.yaml
 .../rule-sets/surge/AI.list
 .../rule-sets/shadowrocket/AI.list
+.../mobile/shadowrocket/dedione.conf
 .../rewrite/quantumult/youtube_qx_merge/YouTubeAds_DualSubs_Merged.conf
 ```
 
