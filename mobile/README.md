@@ -8,17 +8,21 @@
 |---|---|---|
 | `shadowrocket/dedione.conf` | Shadowrocket | 完整配置，基于本人日常配置改造，只改了 AI 分组与分流 |
 
-## 与原始配置的区别（只改了这些）
+## 与原始配置的区别
 
-基于 `lazy_group_my.conf` 改造，**其余一切保留**（DNS、隧道、流媒体/社交/支付/游戏分组、Host、URL Rewrite、MITM 开关）：
+基于 `lazy_group_my.conf` 改造，**General / DNS / 网络 / Host / URL Rewrite / MITM 开关全部保留**，只重建了 `[Proxy Group]` 和 `[Rule]`：
 
-1. **新增 `Dedione` 分组**（line ~58）— 固定出口组，成员是手填的落地节点 `Dedione出口`
-2. **废弃 `AI-All` 组**（保留但注释掉）— 这是原配置"设了 AI 服务还是不可用"的根因：该组**没有任何规则引用它**，所以在此组选什么都没用
-3. **AI 分流改为统一走 `Dedione`**：
-   - 你维护的 `rule-sets/shadowrocket/AI.list`（Claude/Gemini/GPT/DeepMind/Antigravity）→ `Dedione`
-   - 第三方 `global.list`（Adobe/AWS 等）→ `Dedione`
-4. **修复两条 404 规则**：旧 `peanutgao/rule-sets` 仓库已并入本仓库，Gemini/Ozon 规则 URL 已换成新前缀
-5. **脱敏**：删除 `[MITM]` 段的 `ca-p12`/`ca-passphrase` 证书私钥；私钥转存私有库 `mydedione-secrets/mobile/mitm-credentials.txt`，需要时粘回
+1. **组名与电脑端 Clash 对齐**：`谷歌AI`/`国外AI`/`谷歌服务`/`App Store`/`Github`/`微软服务`/`Telegram`/`YouTube`/`NETFLIX`/`Disney+`/`HBO`/`游戏专用`/`苹果服务`/`其他外网` 等——手机和电脑用同一套命名，切换设备不用重新找组
+2. **新增 `Dedione` 固定出口组**——成员是手填的落地节点 `Dedione出口`
+3. **AI 拆成三组**（比电脑端的 谷歌AI/国外AI 更细）：
+   - `GPT`（8 域名：ChatGPT/API/Sora）→ 默认 `Dedione`
+   - `Google`（22 域名：Gemini/AI Studio/DeepMind/Antigravity/Cloud Code）→ 默认 `Dedione`
+   - `Claude`（5 域名：Anthropic/Claude）→ 默认 `Dedione`
+   - 对应规则集 `rule-sets/shadowrocket/AI-{GPT,Google,Claude}.list`（从 `AI.list` 拆分，35 条全覆盖）
+   - 第三方 `global.list`（Adobe/AWS 等）→ `国外AI`
+4. **废弃孤儿组 `AI-All`**：原配置里它没有任何规则引用，在此组选什么都不生效——这是"设了 AI 服务还是不可用"的根因
+5. **修复 404 规则**：旧 `peanutgao/rule-sets` 已并入本仓库，相关 RULE-SET URL 换成新前缀
+6. **脱敏**：删除 `[MITM]` 段的 `ca-p12`/`ca-passphrase`；私钥转存私有库 `mydedione-secrets/mobile/mitm-credentials.txt`
 
 ## 私有资产（订阅 / 密钥）
 
@@ -61,17 +65,16 @@ https://raw.githubusercontent.com/peanutgao/my-proxy-configs/main/mobile/shadowr
 ### 第四步：MITM（如需解密，可选）
 原配置的证书私钥已脱敏并存入私有库 `mitm-credentials.txt`。如需恢复原来的 MITM：
 从私有库取该文件，把其中 `ca-passphrase` 和 `ca-p12` 两行粘回配置的 `[MITM]` 段（`ca-p12` 是一整行，不要换行）。
-若不需要解密，跳过即可——分流规则基于域名，不依赖 MITM。
-不解密也能正常分流（规则基于域名，不依赖解密）。
+若不需要解密，跳过即可——分流规则基于域名，不依赖解密。
 
 ### 第五步：验证
 打开浏览器访问 `https://api.ipify.org`，确认出口 IP = 你的自建落地 IP。
-再访问 `https://claude.ai`，确认走固定出口。
+再分别访问 `claude.ai`（应走 `Claude` 组）、`gemini.google.com`（`Google` 组）、`chatgpt.com`（`GPT` 组），在 SR 首页看流量落在哪个组。
 
 ## 维护方式
 
-- **规则更新**：改 `../rule-sets/shadowrocket/AI.list`，手机端所有引用它的设备下次拉规则自动生效
-- **分组调整**：改 `shadowrocket/dedione.conf` 的 `[Proxy Group]` 段
+- **AI 规则更新**：改 `../rule-sets/shadowrocket/AI.list`（主清单），再同步拆到 `AI-GPT.list`/`AI-Google.list`/`AI-Claude.list`（三组之和须等于主清单）；手机端下次拉规则自动生效
+- **分组调整**：改 `shadowrocket/dedione.conf` 的 `[Proxy Group]` 段，组名与电脑端 MyDedione 保持一致
 - **改完推送**：`git push` 后手机重新导入 URL（或等客户端自动更新）
 
 ## 为什么是这个形态
