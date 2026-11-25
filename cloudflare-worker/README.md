@@ -1,7 +1,7 @@
 # Gemini Cloudflare Worker 反代
 
 `FAILED_PRECONDITION: User location is not supported` 的根因是 Google 对出口
-IP（188.255.157.121，RIPE 注册国塞尔维亚）按注册地判定，不在 Gemini API 支持
+IP（你的 VPS 落地 IP，例如 RIPE 注册国塞尔维亚的 IP）按注册地判定，不在 Gemini API 支持
 地区。本 Worker 反代把 API 请求经 Cloudflare 边缘转发到 Google，绕开出口 IP
 地理判定。
 
