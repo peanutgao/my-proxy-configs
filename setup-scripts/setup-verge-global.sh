@@ -507,10 +507,22 @@ PY
     fi
 fi
 
-if run_with_spinner "探访 gemini.google.com（经 ${LOCAL_PROXY}）" curl -fsSI -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null; then
-    :
+# 探访 gemini.google.com：冷启动时代理刚起、节点未就绪会瞬时失败（SSL_ERROR_SYSCALL）。
+# 静默重试 3 次覆盖就绪窗口；自行打印结果，避免 run_with_spinner 失败时打红色 ✗ + curl 原始错误误导为部署失败。
+printf '  → 探访 gemini.google.com（经 %s）…\n' "$LOCAL_PROXY"
+gemini_ok=0
+for i in 1 2 3; do
+    if curl -fsSI -m 10 -x "$LOCAL_PROXY" https://gemini.google.com -o /dev/null >/dev/null 2>&1; then
+        gemini_ok=1
+        break
+    fi
+    [ "$i" -lt 3 ] && sleep 2
+done
+if [ "$gemini_ok" = "1" ]; then
+    printf "${_UI_BOLD_GREEN}"'  ✓ %s'"${_UI_RESET}"'\n' "gemini.google.com 可达"
 else
-    warn "经 ${LOCAL_PROXY} 探访 gemini.google.com 超时（若尚未选中可用节点属正常）"
+    printf "${_UI_BOLD_YELLOW}"'  ⚠ %s'"${_UI_RESET}"'\n' \
+        "gemini.google.com 暂不可达（多因尚未选中可用节点/健康检查未完成，非部署失败；稍后可在 Verge 复检）"
 fi
 
 progress_done "宿主机 Clash Verge 全局脚本部署完成"
