@@ -2627,6 +2627,10 @@ function main(config) {
   rules.splice(
     at,
     0,
+    // 反重力遥测偷跑掐断：紧跟 OrbStack 直连之后，优先于所有其他规则。
+    // 仅按「进程 + 域名」双条件命中，不影响正常对话/写代码。
+    'AND,((DOMAIN,play.googleapis.com),(PROCESS-NAME,language_server)),REJECT',
+    'AND,((DOMAIN,play.googleapis.com),(PROCESS-NAME,agy)),REJECT',
     'DOMAIN,adsdk.apple.com,拒绝',
     'DOMAIN-SUFFIX,mzstatic.com,App Store',
     'DOMAIN,iosapps.itunes.apple.com,App Store',
